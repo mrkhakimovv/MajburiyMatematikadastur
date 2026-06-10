@@ -4,16 +4,24 @@ import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
 
-const token = process.env.BOT_TOKEN || '8794883881:AAEJPYrFNniqI2duVLoSvJvMBJwtCOlJMNE';
+const token = process.env.BOT_TOKEN;
+if (!token) {
+  console.error("XATO: BOT_TOKEN topilmadi. Iltimos, .env.local faylini yarating va BOT_TOKEN ni kiriting.");
+  // Dasturni to'xtatish (development uchun qulay, lekin serverda crash beradi)
+  // throw new Error("BOT_TOKEN is required!");
+}
+
 const ADMIN_ID = process.env.ADMIN_ID || '1986422890';
-const APP_URL = process.env.APP_URL || 'https://ais-dev-c5la64mo46rzqgz4peeaj5-188441935411.asia-southeast1.run.app';
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
-export const bot = new TelegramBot(token, { polling: true });
+export const bot = new TelegramBot(token || 'dummy_token', { polling: !!token });
 
-// Prevent bot crashes due to polling conflicts (e.g., in multi-instance Cloud Run environments)
-bot.on('polling_error', (error) => {
-  console.warn(`[Bot Polling Warning] ${error.message}`);
-});
+if (token) {
+  // Prevent bot crashes due to polling conflicts (e.g., in multi-instance Cloud Run environments)
+  bot.on('polling_error', (error) => {
+    console.warn(`[Bot Polling Warning] ${error.message}`);
+  });
+}
 
 export function setState(telegramId: string, state: string, data: any = {}) {
   db.prepare('INSERT OR REPLACE INTO bot_state (telegram_id, state, data) VALUES (?, ?, ?)').run(telegramId, state, JSON.stringify(data));

@@ -82,7 +82,7 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
         <div className="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg mb-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10"></div>
           
-          <h1 className="text-2xl font-bold mb-2 relative z-10">Majburiy Matematika</h1>
+          <h1 className="text-2xl font-bold mb-2 mt-4 relative z-10">Majburiy Matematika</h1>
           <p className="text-indigo-100 relative z-10 pr-16">Bilimingizni sinab ko'ring va reytingda ko'tariling!</p>
 
           <button 
@@ -92,6 +92,16 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
           >
             <UserIcon size={28} className="text-white drop-shadow-sm" />
           </button>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="absolute top-3 left-4 z-20 flex items-center justify-center w-8 h-8 bg-white/10 hover:bg-white/20 hover:text-red-300 rounded-full backdrop-blur-md transition-all text-white/90"
+              title="Tizimdan chiqish"
+            >
+              <LogOut size={16} />
+            </button>
+          )}
         </div>
       </div>
 
