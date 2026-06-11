@@ -16,18 +16,25 @@ export default function TestSession({ userId }: { userId: string }) {
 
   const fetchTests = async () => {
     setLoading(true);
-    const limit = type === '10' ? 10 : 1;
     try {
-      const res = await fetch(`/api/tests/random?limit=${limit}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (type === 'cheksiz') {
-          setTests(prev => [...prev, ...data]);
-        } else {
-          setTests(data);
+      if (type?.startsWith('variant-')) {
+        const variantId = type.split('-')[1];
+        const res = await fetch(`/api/variants/${variantId}/tests`);
+        if (res.ok) {
+           const data = await res.json();
+           setTests(data);
         }
       } else {
-        console.error('Failed to fetch tests: API returned an error');
+        const limit = type === '10' ? 10 : 1;
+        const res = await fetch(`/api/tests/random?limit=${limit}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (type === 'cheksiz') {
+            setTests(prev => [...prev, ...data]);
+          } else {
+            setTests(data);
+          }
+        }
       }
     } catch (e) {
       console.error('Failed to fetch tests:', e);
@@ -51,15 +58,15 @@ export default function TestSession({ userId }: { userId: string }) {
       wrong: !isCorrect ? prev.wrong + 1 : prev.wrong
     }));
 
-    if (type === '10') {
+    if (type === '10' || type?.startsWith('variant-')) {
       setTimeout(() => {
-        if (currentIndex < 9) {
+        if (currentIndex < tests.length - 1) {
           setCurrentIndex(prev => prev + 1);
           setSelectedAnswer(null);
         } else {
           finishTest(isCorrect, ans);
         }
-      }, 500); // Reduced delay since we don't need to study the correct answer
+      }, 500);
     }
   };
 
@@ -149,8 +156,10 @@ export default function TestSession({ userId }: { userId: string }) {
 
   if (isFinished) {
     let feedback = null;
-    if (type === '10') {
-      if (results.correct < 5) {
+    if (type === '10' || type?.startsWith('variant-')) {
+      const total = results.correct + results.wrong;
+      const percentage = (results.correct / total) * 100;
+      if (percentage < 50) {
         feedback = (
           <>
             Natija yomonku. O'z ustingizda ko'p ishlashingizga to'g'ri keladi.{' '}
@@ -160,7 +169,7 @@ export default function TestSession({ userId }: { userId: string }) {
             kanalini kuzatib boring. Va online kursiga qo'shiling. Albatta natijaga erishasiz.
           </>
         );
-      } else if (results.correct < 7) {
+      } else if (percentage < 70) {
         feedback = (
           <>
             Natija yomonmas. Lekin yaxshi ham deb bo'lmaydi.{' '}

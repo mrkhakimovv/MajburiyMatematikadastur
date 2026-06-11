@@ -186,6 +186,19 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
         </button>
 
         <button 
+          onClick={() => navigate('/variants')} 
+          className="w-full flex items-center p-4 bg-white rounded-xl shadow-sm border border-gray-100 active:scale-95 transition-transform"
+        >
+          <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mr-4">
+            <Target size={24} />
+          </div>
+          <div className="text-left flex-1">
+            <h3 className="font-bold text-gray-900 text-lg">Variantlar</h3>
+            <p className="text-sm text-gray-500">Maxsus tuzilgan variantlarni yechish</p>
+          </div>
+        </button>
+
+        <button 
           onClick={() => navigate('/leaderboard')} 
           className="w-full flex items-center p-4 bg-white rounded-xl shadow-sm border border-gray-100 active:scale-95 transition-transform"
         >

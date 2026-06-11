@@ -6,7 +6,7 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant'>('main');
   const [testId, setTestId] = useState('');
   const [testData, setTestData] = useState<any>(null);
   const [allTests, setAllTests] = useState<any[]>([]);
@@ -25,6 +25,11 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const [editTestImage, setEditTestImage] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
+  const [variantMethod, setVariantMethod] = useState<'random' | 'manual'>('random');
+  const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
+  const [manualTests, setManualTests] = useState<Array<{file: File | null, answer: string, previewUrl: string | null}>>(Array.from({length: 10}, () => ({file: null, answer: '', previewUrl: null})));
+  const [isCreatingVariant, setIsCreatingVariant] = useState(false);
+
   const tg = (window as any).Telegram?.WebApp;
 
   const showAlert = (msg: string) => {
@@ -36,6 +41,68 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
       }
     } else {
       alert(msg);
+    }
+  };
+
+  const createVariant = async () => {
+    // allow any amount for random, it will max out at 10 on backend.
+    if (variantMethod === 'manual') {
+      const incomplete = manualTests.some(t => !t.file || !t.answer);
+      if (incomplete) {
+        showAlert("Iltimos, barcha 10 ta test uchun rasm va javobni kiriting");
+        return;
+      }
+    }
+    
+    setIsCreatingVariant(true);
+    try {
+      let variantTestIds: string[] = [];
+
+      if (variantMethod === 'manual') {
+        const uploadedIds: string[] = [];
+        for (const test of manualTests) {
+          const formData = new FormData();
+          formData.append('image', test.file as Blob);
+          formData.append('correct_answer', test.answer);
+
+          const res = await fetch('/api/admin/tests', {
+            method: 'POST',
+            body: formData,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+               uploadedIds.push(data.id);
+            }
+          }
+        }
+        
+        if (uploadedIds.length !== 10) {
+           showAlert("Ba'zi testlarni yuklashda xatolik yuz berdi");
+           setIsCreatingVariant(false);
+           return;
+        }
+        variantTestIds = uploadedIds;
+      }
+
+      const res = await fetch('/api/admin/variants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: variantMethod, testIds: variantMethod === 'manual' ? variantTestIds : selectedTestIds })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showAlert(`${data.name} muvaffaqiyatli yaratildi!`);
+        setActiveTab('main');
+        setManualTests(Array.from({length: 10}, () => ({file: null, answer: '', previewUrl: null})));
+      } else {
+         const err = await res.json();
+         showAlert(err.error || "Xatolik yuz berdi.");
+      }
+    } catch (e) {
+      showAlert("Xatolik yuz berdi");
+    } finally {
+      setIsCreatingVariant(false);
     }
   };
 
@@ -293,6 +360,17 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                   <span className="text-xs text-indigo-100 mt-0.5 block">Veb panel orqali maxsus sahifada test qo'shish</span>
                 </div>
               </button>
+
+              <button 
+                onClick={() => { setActiveTab('create-variant'); fetchAllTests(); }} 
+                className="w-full flex items-center gap-4 bg-purple-600 text-white p-4 rounded-xl shadow-sm active:scale-95 transition-transform"
+              >
+                <div className="bg-white/20 p-2.5 rounded-xl"><PlusCircle size={24} /></div>
+                <div className="text-left flex-1">
+                  <span className="font-bold block text-lg">Variant yaratish</span>
+                  <span className="text-xs text-purple-100 mt-0.5 block">10 ta savoldan iborat maxsus variant tuzish</span>
+                </div>
+              </button>
             </div>
           </div>
 
@@ -359,6 +437,120 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
               ))}
               {allTests.length === 0 && <p className="text-center text-gray-500 py-4">Testlar mavjud emas</p>}
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'create-variant' && (
+        <div className="space-y-4">
+          <button onClick={() => setActiveTab('main')} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
+            <ArrowLeft size={20} /> Orqaga
+          </button>
+          <div className="bg-white p-4 rounded-xl shadow-sm">
+            <h2 className="text-lg font-bold mb-4">Variant yaratish</h2>
+            
+            <div className="flex gap-4 mb-6">
+              <button 
+                onClick={() => setVariantMethod('random')}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium border-2 transition-colors ${variantMethod === 'random' ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600'}`}
+              >
+                Random (Avtomatik 10ta)
+              </button>
+              <button 
+                onClick={() => setVariantMethod('manual')}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium border-2 transition-colors ${variantMethod === 'manual' ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600'}`}
+              >
+                Qo'lda kiritish
+              </button>
+            </div>
+
+            {variantMethod === 'manual' && (
+              <div className="mb-6 space-y-6 max-h-96 overflow-y-auto pr-2">
+                <p className="font-medium text-gray-700">10 ta savolni kiriting</p>
+                {manualTests.map((t, idx) => (
+                  <div key={idx} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                    <p className="font-bold text-gray-900 mb-3 text-lg">{idx + 1}-savol rasmi (yoki joylang)</p>
+                    
+                    <div className="mb-4">
+                      <div 
+                        className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-100 transition-colors cursor-pointer bg-white"
+                        onClick={() => document.getElementById(`manual-test-upload-${idx}`)?.click()}
+                        onPaste={(e) => {
+                          const file = e.clipboardData.files?.[0];
+                          if (file && file.type.startsWith('image/')) {
+                            const updated = [...manualTests];
+                            updated[idx].file = file;
+                            updated[idx].previewUrl = URL.createObjectURL(file);
+                            setManualTests(updated);
+                          }
+                        }}
+                      >
+                        <input 
+                           id={`manual-test-upload-${idx}`}
+                           type="file" 
+                           accept="image/*"
+                           className="hidden"
+                           onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                 const updated = [...manualTests];
+                                 updated[idx].file = file;
+                                 updated[idx].previewUrl = URL.createObjectURL(file);
+                                 setManualTests(updated);
+                              }
+                           }}
+                        />
+                        {t.previewUrl ? (
+                          <div className="mt-2">
+                            <img src={t.previewUrl} className="mx-auto max-h-48 object-contain rounded-lg border border-gray-200" />
+                            <p className="text-sm text-indigo-600 mt-2 font-medium">Boshqa rasm tanlash</p>
+                          </div>
+                        ) : (
+                          <div className="py-6 focus:outline-none" tabIndex={0}>
+                            <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-3 pointer-events-none">
+                              <PlusCircle size={24} />
+                            </div>
+                            <p className="text-gray-600 font-medium pointer-events-none">Rasmni tanlang yoki shu yerga joylang</p>
+                            <p className="text-xs text-gray-400 mt-1 pointer-events-none">PNG, JPG, JPEG</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">To'g'ri javob</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {['A', 'B', 'C', 'D'].map(ans => (
+                          <button 
+                            key={ans}
+                            onClick={() => {
+                               const updated = [...manualTests];
+                               updated[idx].answer = ans;
+                               setManualTests(updated);
+                            }}
+                            className={`py-3 rounded-lg border font-bold text-lg ${t.answer === ans ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200'}`}
+                          >
+                            {ans}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button 
+              onClick={createVariant} 
+              disabled={isCreatingVariant}
+              className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-white transition-all ${
+                 isCreatingVariant
+                 ? 'bg-purple-400 cursor-not-allowed'
+                 : 'bg-purple-600 active:scale-95 shadow-sm hover:bg-purple-700'
+              }`}
+            >
+              {isCreatingVariant ? 'Yaratilmoqda...' : 'Yaratish'}
+            </button>
           </div>
         </div>
       )}

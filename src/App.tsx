@@ -7,6 +7,7 @@ import Profile from './components/Profile';
 import Leaderboard from './components/Leaderboard';
 import Auth from './components/Auth';
 import Chats from './components/Chats';
+import VariantsList from './components/VariantsList';
 
 export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -69,6 +70,7 @@ export default function App() {
           <Route path="/user/:username" element={<Profile userId={userId} />} />
           <Route path="/leaderboard" element={<Leaderboard userId={userId} />} />
           <Route path="/chats" element={<Chats userId={userId} />} />
+          <Route path="/variants" element={<VariantsList userId={userId} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

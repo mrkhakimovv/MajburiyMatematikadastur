@@ -60,9 +60,15 @@ apiRouter.post('/auth/signup', async (req, res) => {
   }
 
   const formattedUsername = '@' + rawUsername;
-  const telegram_id = provided_telegram_id ? String(provided_telegram_id) : `web_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   try {
+    const existingUser = await dbFirestore.collection('users').where('username', '==', formattedUsername).get();
+    if (!existingUser.empty) {
+      return res.status(400).json({ error: "Ushbu username band. Iltimos boshqasini tanlang." });
+    }
+
+  const telegram_id = provided_telegram_id ? String(provided_telegram_id) : `web_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
     const userSnap = await dbFirestore.collection('users').doc(telegram_id).get();
     if (userSnap.exists) {
       return res.status(400).json({ error: "Siz allaqachon ro'yxatdan o'tgansiz. Iltimos, tizimga kiring." });
@@ -505,5 +511,77 @@ apiRouter.post('/admin/export-users', async (req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+apiRouter.get('/variants', async (req, res) => {
+  if (!dbFirestore) return res.json([]);
+  const snap = await dbFirestore.collection('variants').orderBy('created_at', 'desc').get();
+  res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+});
+
+apiRouter.post('/admin/variants', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  try {
+    const { method, testIds } = req.body;
+    
+    let selectedIds: string[] = [];
+    if (method === 'random') {
+      const snap = await dbFirestore.collection('tests').get();
+      let allTests = snap.docs.map(d => d.id);
+      selectedIds = allTests.sort(() => 0.5 - Math.random()).slice(0, 10);
+    } else if (method === 'manual') {
+      selectedIds = testIds || [];
+    }
+
+    if (selectedIds.length === 0) return res.status(400).json({ error: 'No tests selected' });
+
+    const snap = await dbFirestore.collection('variants').get();
+    let maxNumber = 0;
+    snap.docs.forEach(d => {
+        const titleMatch = d.data()?.name?.match(/Variant (\d+)/i);
+        if (titleMatch) {
+            maxNumber = Math.max(maxNumber, parseInt(titleMatch[1]));
+        }
+    });
+    
+    const count = maxNumber + 1;
+    const name = `Variant ${count}`;
+
+    const variantData = {
+      name,
+      testIds: selectedIds,
+      created_at: Date.now()
+    };
+    
+    const docRef = await dbFirestore.collection('variants').add(variantData);
+    res.json({ success: true, id: docRef.id, name });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+apiRouter.get('/variants/:id/tests', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json([]);
+  try {
+    const variantSnap = await dbFirestore.collection('variants').doc(req.params.id).get();
+    if (!variantSnap.exists) return res.status(404).json({ error: 'Not found' });
+    
+    const data = variantSnap.data() as any;
+    const testIds = data.testIds || [];
+    
+    if (testIds.length === 0) return res.json([]);
+    
+    const tests = [];
+    for (const id of testIds) {
+      const t = await dbFirestore.collection('tests').doc(id).get();
+      if (t.exists) {
+        tests.push({ id: t.id, ...t.data() });
+      }
+    }
+    
+    res.json(tests);
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
