@@ -39,15 +39,6 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     }
   };
 
-  const triggerTestCreate = async () => {
-    try {
-      await fetch('/api/admin/trigger-test-create', { method: 'POST' });
-      tg?.close();
-    } catch (e) {
-      console.error('Failed to trigger test create:', e);
-    }
-  };
-
   const createTestWeb = async () => {
     if (!newTestImage || !newTestAnswer) {
       showAlert("Iltimos, rasm va to'g'ri javobni tanlang");
@@ -226,11 +217,20 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
 
   const exportUsers = async () => {
     try {
-      await fetch('/api/admin/export-users', { method: 'POST' });
-      showAlert("Foydalanuvchilar ro'yxati botga yuborildi");
+      const res = await fetch('/api/admin/export-users', { method: 'POST' });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'foydalanuvchilar.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (e) {
       console.error('Failed to export users:', e);
-      showAlert('Tarmoq xatoligi yuz berdi');
+      showAlert('Xatolik yuz berdi');
     }
   };
 
@@ -291,17 +291,6 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                 <div className="text-left flex-1">
                   <span className="font-bold block text-lg">Yangi test yaratish</span>
                   <span className="text-xs text-indigo-100 mt-0.5 block">Veb panel orqali maxsus sahifada test qo'shish</span>
-                </div>
-              </button>
-
-              <button 
-                onClick={triggerTestCreate} 
-                className="w-full flex items-center gap-4 bg-[#0088cc] text-white p-4 rounded-xl shadow-sm active:scale-95 transition-transform"
-              >
-                <div className="bg-white/20 p-2.5 rounded-xl"><MessageCircle size={24} /></div>
-                <div className="text-left flex-1">
-                  <span className="font-bold block text-lg">Telegram orqali yaratish</span>
-                  <span className="text-xs text-blue-100 mt-0.5 block">Rasm va javobni to'g'ridan-to'g'ri botga yuborish</span>
                 </div>
               </button>
             </div>

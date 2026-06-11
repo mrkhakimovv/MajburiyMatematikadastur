@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { dbFirestore } from './firebase.ts';
-import { bot, setState, sendUsersExcel } from './bot.ts';
+import ExcelJS from 'exceljs';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -57,10 +57,6 @@ apiRouter.post('/auth/signup', async (req, res) => {
 
   if (!/^[a-z0-9_.]+$/.test(rawUsername)) {
     return res.status(400).json({ error: "Username faqat kichik lotin harflari, raqamlar, '_' va '.' dan iborat bo'lishi kerak" });
-  }
-
-  if (password.length < 4 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return res.status(400).json({ error: "Parol kamida 4 ta belgidan, katta va kichik harflar hamda raqamlardan iborat bo'lishi kerak" });
   }
 
   const formattedUsername = '@' + rawUsername;
@@ -351,11 +347,7 @@ apiRouter.get('/tests/random', async (req, res) => {
     if (test.file_id.startsWith('/uploads/')) {
       test.image_url = test.file_id;
     } else {
-      try {
-        test.image_url = await bot.getFileLink(test.file_id);
-      } catch (e) {
-        test.image_url = null;
-      }
+      test.image_url = null;
     }
   }
   res.json(tests);
@@ -392,11 +384,7 @@ apiRouter.get('/admin/tests/:id', async (req, res) => {
   if (test.file_id.startsWith('/uploads/')) {
     test.image_url = test.file_id;
   } else {
-    try {
-      test.image_url = await bot.getFileLink(test.file_id);
-    } catch (e) {
-      test.image_url = null;
-    }
+    test.image_url = null;
   }
   res.json(test);
 });
@@ -467,12 +455,6 @@ apiRouter.get('/admin/stats', async (req, res) => {
   });
 });
 
-apiRouter.post('/admin/trigger-test-create', async (req, res) => {
-  await setState(ADMIN_ID, 'WAITING_FOR_TEST_PHOTO');
-  bot.sendMessage(ADMIN_ID, 'Test rasmini yuboring:');
-  res.json({ success: true });
-});
-
 apiRouter.post('/admin/tests', upload.single('image'), async (req, res) => {
   if (!dbFirestore) return res.json({});
   try {
@@ -490,6 +472,38 @@ apiRouter.post('/admin/tests', upload.single('image'), async (req, res) => {
 });
 
 apiRouter.post('/admin/export-users', async (req, res) => {
-  await sendUsersExcel(parseInt(ADMIN_ID));
-  res.json({ success: true });
+  if (!dbFirestore) return res.status(500).json({ error: 'Db not connected' });
+  try {
+    const usersSnap = await dbFirestore.collection('users').get();
+    const users = usersSnap.docs.map((doc: any) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        telegram_id: data.telegram_id,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone_number: data.phone_number,
+        registered_at: new Date(data.registered_at || Date.now()).toLocaleString()
+      };
+    });
+    
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Foydalanuvchilar');
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 25 },
+      { header: 'Telegram ID', key: 'telegram_id', width: 15 },
+      { header: 'Ism', key: 'first_name', width: 20 },
+      { header: 'Familiya', key: 'last_name', width: 20 },
+      { header: 'Telefon', key: 'phone_number', width: 15 },
+      { header: 'Sana', key: 'registered_at', width: 25 },
+    ];
+    users.forEach((u: any) => worksheet.addRow(u));
+    const filePath = path.join(process.cwd(), 'users.xlsx');
+    await workbook.xlsx.writeFile(filePath);
+    res.download(filePath, 'foydalanuvchilar.xlsx', () => {
+      fs.unlinkSync(filePath);
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Export failed' });
+  }
 });

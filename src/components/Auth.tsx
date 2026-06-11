@@ -169,19 +169,7 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
     }
   };
 
-  // Password validation checks
-  const isPasswordLong = password.length >= 4;
-  const isPasswordMixed = /[a-z]/.test(password) && /[A-Z]/.test(password);
-  const isPasswordHasNumber = /[0-9]/.test(password);
-  const passwordStrength = (isPasswordLong ? 1 : 0) + (isPasswordMixed ? 1 : 0) + (isPasswordHasNumber ? 1 : 0);
 
-  const getStrengthColor = () => {
-    if (password.length === 0) return 'bg-gray-200 w-0';
-    if (passwordStrength === 1) return 'bg-red-500 w-1/3';
-    if (passwordStrength === 2) return 'bg-yellow-500 w-2/3';
-    if (passwordStrength === 3) return 'bg-green-500 w-full';
-    return 'bg-gray-200 w-0';
-  };
 
   return (
     <div className="min-h-[100dvh] relative bg-gray-50 flex items-center justify-center p-4 overflow-hidden selection:bg-indigo-200 selection:text-indigo-900">
@@ -366,28 +354,6 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
                 </button>
               </div>
 
-              {/* Password Requirements UI for Registration */}
-              <div className={`transition-all duration-500 overflow-hidden ${isLogin ? 'max-h-0 opacity-0' : 'max-h-[150px] opacity-100 mt-3'}`}>
-                {/* Strength Meter */}
-                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden mb-3">
-                  <div className={`h-full transition-all duration-500 ${getStrengthColor()}`} />
-                </div>
-                {/* Requirements Checkmarks */}
-                <div className="grid grid-cols-1 gap-1.5">
-                  <div className={`flex items-center gap-2 text-xs font-medium transition-colors ${isPasswordLong ? 'text-green-600' : 'text-gray-400'}`}>
-                    {isPasswordLong ? <CheckCircle size={14} className="text-green-500" /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-200" />}
-                    Kamida 4 ta belgi
-                  </div>
-                  <div className={`flex items-center gap-2 text-xs font-medium transition-colors ${isPasswordMixed ? 'text-green-600' : 'text-gray-400'}`}>
-                    {isPasswordMixed ? <CheckCircle size={14} className="text-green-500" /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-200" />}
-                    Katta va kichik harflar
-                  </div>
-                  <div className={`flex items-center gap-2 text-xs font-medium transition-colors ${isPasswordHasNumber ? 'text-green-600' : 'text-gray-400'}`}>
-                    {isPasswordHasNumber ? <CheckCircle size={14} className="text-green-500" /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-200" />}
-                    Kamida bitta raqam
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Error Message Alert */}

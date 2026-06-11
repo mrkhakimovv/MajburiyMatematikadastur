@@ -3,7 +3,6 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cors from 'cors';
 import path from 'path';
-import { initBot } from './server/bot.ts';
 import { apiRouter } from './server/api.ts';
 
 async function startServer() {
@@ -26,8 +25,6 @@ async function startServer() {
     console.error('API Error:', err);
     res.status(500).json({ error: 'Internal server error' });
   });
-
-  initBot();
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
