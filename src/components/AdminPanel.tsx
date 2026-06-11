@@ -6,10 +6,11 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants'>('main');
   const [testId, setTestId] = useState('');
   const [testData, setTestData] = useState<any>(null);
   const [allTests, setAllTests] = useState<any[]>([]);
+  const [allVariants, setAllVariants] = useState<any[]>([]);
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -170,6 +171,17 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     }
   };
 
+  const fetchAllVariants = async () => {
+    try {
+      const res = await fetch('/api/variants');
+      if (res.ok) {
+        setAllVariants(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch all variants:', e);
+    }
+  };
+
   const updateTestAnswer = async () => {
     const answerToSave = editTestAnswer || testData.correct_answer;
     
@@ -207,6 +219,94 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     } catch (e) {
       console.error('Failed to delete test:', e);
       showAlert('Tarmoq xatoligi yuz berdi');
+    }
+  };
+
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const doDeleteVariant = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/variants/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAllVariants();
+        setDeleteConfirmId(null);
+        showAlert("Variant o'chirildi");
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch {
+      showAlert("Tarmoq xatoligi");
+    }
+  };
+
+  const doRenameVariant = async (id: string, currentName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newName = window.prompt("Variantning yangi nomi:", currentName);
+    if (!newName || newName === currentName) return;
+    try {
+      const res = await fetch(`/api/admin/variants/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (res.ok) {
+        fetchAllVariants();
+        showAlert("Nomi o'zgartirildi");
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch {
+      showAlert("Tarmoq xatoligi");
+    }
+  };
+
+  const doDeleteTest = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/tests/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAllTests();
+        setDeleteConfirmId(null);
+        // custom toast inside page, replacing showAlert if possible, but showAlert can log or fail silently without breaking execution
+        showAlert("Test o'chirildi");
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch (err) {
+      showAlert('Tarmoq xatoligi yuz berdi');
+    }
+  };
+
+  const deleteTestById = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const doDelete = async () => {
+      try {
+        const res = await fetch(`/api/admin/tests/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showAlert("Test o'chirildi");
+          fetchAllTests();
+        } else {
+          showAlert("Xatolik yuz berdi");
+        }
+      } catch (err) {
+        showAlert('Tarmoq xatoligi yuz berdi');
+      }
+    };
+
+    if (tg?.showConfirm && tg?.isVersionAtLeast && tg.isVersionAtLeast('6.2')) {
+      try {
+        tg.showConfirm("Rostdan ham ushbu testni o'chirmoqchimisiz?", (agreed: boolean) => {
+          if (agreed) doDelete();
+        });
+      } catch (err) {
+        if (window.confirm("Rostdan ham ushbu testni o'chirmoqchimisiz?")) {
+          doDelete();
+        }
+      }
+    } else {
+      if (window.confirm("Rostdan ham ushbu testni o'chirmoqchimisiz?")) {
+        doDelete();
+      }
     }
   };
 
@@ -305,6 +405,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     if (activeTab === 'chats') fetchChats();
     if (activeTab === 'stats') fetchStats();
     if (activeTab === 'all-tests') fetchAllTests();
+    if (activeTab === 'all-variants') fetchAllVariants();
   }, [activeTab]);
 
   useEffect(() => {
@@ -382,6 +483,11 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                 <span className="font-medium">Barcha testlar ro'yxati</span>
               </button>
 
+              <button onClick={() => setActiveTab('all-variants')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
+                <List size={20} className="text-purple-600" />
+                <span className="font-medium">Barcha variantlar ro'yxati</span>
+              </button>
+
               <button onClick={() => setActiveTab('edit')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
                 <Edit size={20} className="text-emerald-600" />
                 <span className="font-medium">Testni tahrirlash</span>
@@ -408,6 +514,64 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
         </div>
       )}
 
+      {activeTab === 'all-variants' && (
+        <div className="space-y-4">
+          <button onClick={() => setActiveTab('main')} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
+            <ArrowLeft size={20} /> Orqaga
+          </button>
+          <div className="bg-white p-4 rounded-xl shadow-sm">
+            <h2 className="text-lg font-bold mb-4">Barcha variantlar</h2>
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+              {allVariants.map(variant => (
+                <div 
+                  key={variant.id} 
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+                >
+                  <div>
+                    <p className="font-bold text-gray-800">{variant.name || `Variant #${variant.id}`}</p>
+                    <p className="text-xs text-gray-500">{variant.testIds?.length || 0} ta test • {new Date(variant.created_at).toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={(e) => doRenameVariant(variant.id, variant.name, e)}
+                      className="p-1 text-indigo-500 hover:bg-indigo-50 rounded"
+                      title="Nomini o'zgartirish"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    {deleteConfirmId === `variant_${variant.id}` ? (
+                      <div className="flex items-center gap-2 bg-red-50 p-1 rounded">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); doDeleteVariant(variant.id); }}
+                          className="text-xs bg-red-600 text-white px-2 py-1 rounded font-bold"
+                        >
+                          Ha, o'chirish
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}
+                          className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded font-bold"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(`variant_${variant.id}`); }}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        title="O'chirish"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {allVariants.length === 0 && <p className="text-center text-gray-500 py-4">Variantlar mavjud emas</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'all-tests' && (
         <div className="space-y-4">
           <button onClick={() => setActiveTab('main')} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
@@ -431,6 +595,31 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-bold text-sm">{test.correct_answer}</span>
+                    
+                    {deleteConfirmId === test.id ? (
+                      <div className="flex items-center gap-2 bg-red-50 p-1 rounded">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); doDeleteTest(test.id); }}
+                          className="text-xs bg-red-600 text-white px-2 py-1 rounded font-bold"
+                        >
+                          Ha, o'chirish
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}
+                          className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded font-bold"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(test.id); }}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                    
                     <Edit size={16} className="text-indigo-400" />
                   </div>
                 </div>
@@ -704,10 +893,24 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                     {isUploading ? 'Saqlanmoqda...' : "O'zgarishlarni saqlash"}
                   </button>
 
-                  <button onClick={deleteTest} className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 py-3 rounded-xl font-medium hover:bg-red-100 transition-colors">
-                    <Trash2 size={18} />
-                    Testni o'chirish
-                  </button>
+                  {deleteConfirmId === 'edit_test' ? (
+                    <div className="w-full flex items-center gap-2 bg-red-50 p-2 rounded-xl">
+                      <button onClick={async () => {
+                        await doDeleteTest(testId);
+                        setActiveTab('all-tests');
+                      }} className="flex-1 bg-red-600 text-white py-2 rounded-lg font-bold">
+                        Ha, o'chirish
+                      </button>
+                      <button onClick={() => setDeleteConfirmId(null)} className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg font-bold">
+                        Bekor qilish
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setDeleteConfirmId('edit_test')} className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 py-3 rounded-xl font-medium hover:bg-red-100 transition-colors">
+                      <Trash2 size={18} />
+                      Testni o'chirish
+                    </button>
+                  )}
                 </div>
               </div>
             )}

@@ -569,6 +569,19 @@ apiRouter.post('/admin/variants', async (req, res) => {
   }
 });
 
+apiRouter.delete('/admin/variants/:id', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  await dbFirestore.collection('variants').doc(req.params.id).delete();
+  res.json({ success: true });
+});
+
+apiRouter.put('/admin/variants/:id', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  const { name } = req.body;
+  await dbFirestore.collection('variants').doc(req.params.id).update({ name });
+  res.json({ success: true });
+});
+
 apiRouter.get('/variants/:id/tests', async (req, res) => {
   if (!dbFirestore) return res.status(500).json([]);
   try {
