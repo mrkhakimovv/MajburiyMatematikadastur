@@ -22,22 +22,32 @@ try {
 
   // 2. Read AI studio configuration
   const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  
+  const initOptions: any = {};
+  if (credential) {
+    initOptions.credential = credential;
+  }
+
+  let dbId = '(default)';
+  
   if (fs.existsSync(configPath)) {
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    
-    // Fallback if no explicit service account is provided, hoping ADC works
-    // (ADC usually does NOT work for user-provisioned projects without IAM propagation)
-    const initOptions: any = { projectId: firebaseConfig.projectId };
-    if (credential) {
-      initOptions.credential = credential;
-    }
-    
+    initOptions.projectId = firebaseConfig.projectId;
+    dbId = firebaseConfig.firestoreDatabaseId || '(default)';
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    initOptions.projectId = sa.project_id;
+  } else if (process.env.GCP_PROJECT) {
+    initOptions.projectId = process.env.GCP_PROJECT;
+  }
+
+  if (Object.keys(initOptions).length > 0) {
     const app = getApps().length === 0 ? initializeApp(initOptions) : getApp();
     firestoreDb = getFirestore(app);
-    firestoreDb.settings({ databaseId: firebaseConfig.firestoreDatabaseId || '(default)' });
+    firestoreDb.settings({ databaseId: dbId });
     console.log('Firebase Admin SDK initialized successfully.');
   } else {
-    console.warn('firebase-applet-config.json not found');
+    console.warn('Neither firebase-applet-config.json nor FIREBASE_SERVICE_ACCOUNT_JSON was found. Firebase may not function.');
   }
 } catch (e) {
   console.error('Error initializing Firebase Admin:', e);
