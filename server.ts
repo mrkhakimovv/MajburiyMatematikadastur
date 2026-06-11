@@ -1,6 +1,8 @@
+import "express-async-errors";
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cors from 'cors';
+import path from 'path';
 import { initBot } from './server/bot.ts';
 import { apiRouter } from './server/api.ts';
 
@@ -10,7 +12,7 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
-  app.use('/uploads', express.static('public/uploads'));
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
   app.use('/api', apiRouter);
 
@@ -34,7 +36,11 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static('dist'));
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {

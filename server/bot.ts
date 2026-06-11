@@ -1,5 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api';
-import db from './db.ts';
+import { dbFirestore } from './firebase.ts';
 import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
@@ -7,8 +7,6 @@ import path from 'path';
 const token = process.env.BOT_TOKEN;
 if (!token) {
   console.error("XATO: BOT_TOKEN topilmadi. Iltimos, .env.local faylini yarating va BOT_TOKEN ni kiriting.");
-  // Dasturni to'xtatish (development uchun qulay, lekin serverda crash beradi)
-  // throw new Error("BOT_TOKEN is required!");
 }
 
 const ADMIN_ID = process.env.ADMIN_ID || '1986422890';
@@ -17,42 +15,67 @@ const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 export const bot = new TelegramBot(token || 'dummy_token', { polling: !!token });
 
 if (token) {
-  // Prevent bot crashes due to polling conflicts (e.g., in multi-instance Cloud Run environments)
   bot.on('polling_error', (error) => {
     console.warn(`[Bot Polling Warning] ${error.message}`);
   });
 }
 
-export function setState(telegramId: string, state: string, data: any = {}) {
-  db.prepare('INSERT OR REPLACE INTO bot_state (telegram_id, state, data) VALUES (?, ?, ?)').run(telegramId, state, JSON.stringify(data));
+export async function setState(telegramId: string, state: string, data: any = {}) {
+  if (!dbFirestore) return;
+  try {
+    await dbFirestore.collection('bot_states').doc(telegramId).set({
+      state,
+      data: JSON.stringify(data)
+    });
+  } catch (e: any) {
+    if (e.code === 7) console.error("Firebase permission denied. Missing Service Account.");
+  }
 }
 
-export function getState(telegramId: string) {
-  const row = db.prepare('SELECT state, data FROM bot_state WHERE telegram_id = ?').get(telegramId) as any;
-  if (row) {
-    return { state: row.state, data: JSON.parse(row.data) };
+export async function getState(telegramId: string) {
+  if (!dbFirestore) return null;
+  try {
+    const doc = await dbFirestore.collection('bot_states').doc(telegramId).get();
+    if (doc.exists) {
+      const data = doc.data() as any;
+      return { state: data.state, data: JSON.parse(data.data || '{}') };
+    }
+  } catch (e: any) {
+    if (e.code === 7) console.error("Firebase permission denied. Missing Service Account.");
   }
   return null;
 }
 
-export function clearState(telegramId: string) {
-  db.prepare('DELETE FROM bot_state WHERE telegram_id = ?').run(telegramId);
+export async function clearState(telegramId: string) {
+  if (!dbFirestore) return;
+  try {
+    await dbFirestore.collection('bot_states').doc(telegramId).delete();
+  } catch (e: any) {
+    if (e.code === 7) console.error("Firebase permission denied. Missing Service Account.");
+  }
 }
 
 async function checkChannels(userId: number) {
-  const channels = db.prepare('SELECT username FROM channels').all() as any[];
-  const notSubscribed = [];
-  for (const ch of channels) {
-    try {
-      const chatMember = await bot.getChatMember(ch.username, userId);
-      if (chatMember.status === 'left' || chatMember.status === 'kicked') {
+  if (!dbFirestore) return [];
+  try {
+    const snapshot = await dbFirestore.collection('channels').get();
+    const notSubscribed: string[] = [];
+    for (const doc of snapshot.docs) {
+      const ch = doc.data();
+      try {
+        const chatMember = await bot.getChatMember(ch.username, userId);
+        if (chatMember.status === 'left' || chatMember.status === 'kicked') {
+          notSubscribed.push(ch.username);
+        }
+      } catch (e) {
         notSubscribed.push(ch.username);
       }
-    } catch (e) {
-      notSubscribed.push(ch.username);
     }
+    return notSubscribed;
+  } catch (e: any) {
+    if (e.code === 7) console.error("Firebase permission denied. Missing Service Account.");
+    return [];
   }
-  return notSubscribed;
 }
 
 export function initBot() {
@@ -80,7 +103,7 @@ export function initBot() {
       return;
     }
 
-    startRegistration(chatId, userId.toString());
+    await startRegistration(chatId, userId.toString());
   });
 
   bot.on('callback_query', async (query) => {
@@ -95,51 +118,65 @@ export function initBot() {
       } else {
         bot.answerCallbackQuery(query.id, { text: 'Obuna tasdiqlandi!' });
         bot.deleteMessage(chatId, query.message!.message_id);
-        startRegistration(chatId, userId.toString());
+        await startRegistration(chatId, userId.toString());
       }
     } else if (query.data?.startsWith('test_ans_')) {
       const ans = query.data.split('_')[2];
-      const state = getState(userId.toString());
-      if (state && state.state === 'WAITING_FOR_TEST_ANSWER') {
-        const fileId = state.data.fileId;
-        const info = db.prepare('INSERT INTO tests (file_id, correct_answer) VALUES (?, ?)').run(fileId, ans);
-        bot.sendMessage(chatId, `Test bazaga saqlandi. ID: ${info.lastInsertRowid}`);
-        clearState(userId.toString());
+      const stateObj = await getState(userId.toString());
+      if (stateObj && stateObj.state === 'WAITING_FOR_TEST_ANSWER' && dbFirestore) {
+        const fileId = stateObj.data.fileId;
+        const testRef = await dbFirestore.collection('tests').add({
+          file_id: fileId,
+          correct_answer: ans,
+          created_at: Date.now()
+        });
+        bot.sendMessage(chatId, `Test bazaga saqlandi. ID: ${testRef.id}`);
+        await clearState(userId.toString());
         bot.deleteMessage(chatId, query.message!.message_id);
       }
     } else if (query.data === 'broadcast_yes') {
-      const state = getState(userId.toString());
-      if (state && state.state === 'WAITING_FOR_BROADCAST_CONFIRM') {
-        const msgId = state.data.messageId;
-        const users = db.prepare('SELECT telegram_id FROM users').all() as any[];
+      const stateObj = await getState(userId.toString());
+      if (stateObj && stateObj.state === 'WAITING_FOR_BROADCAST_CONFIRM' && dbFirestore) {
+        const msgId = stateObj.data.messageId;
+        const usersSnap = await dbFirestore.collection('users').get();
         let count = 0;
         bot.sendMessage(chatId, 'Reklama yuborilmoqda...');
-        for (const u of users) {
+        for (const doc of usersSnap.docs) {
           try {
-            await bot.copyMessage(u.telegram_id, chatId, msgId);
+            await bot.copyMessage(doc.id, chatId, msgId);
             count++;
           } catch (e) {}
         }
         bot.sendMessage(chatId, `Reklama ${count} ta foydalanuvchiga muvaffaqiyatli yuborildi.`);
-        clearState(userId.toString());
+        await clearState(userId.toString());
       }
     } else if (query.data === 'broadcast_no') {
       bot.sendMessage(chatId, 'Reklama yuborish bekor qilindi.');
-      clearState(userId.toString());
+      await clearState(userId.toString());
     }
   });
 
-  function startRegistration(chatId: number, telegramId: string) {
-    const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(telegramId);
-    if (user) {
+  async function startRegistration(chatId: number, telegramId: string) {
+    if (!dbFirestore) return;
+    const userDoc = await dbFirestore.collection('users').doc(telegramId).get();
+    if (userDoc.exists) {
       sendUserPanel(chatId);
     } else {
-      // Automatically register with a default name
       const defaultFirstName = `Foydalanuvchi`;
-      const defaultLastName = `${telegramId.slice(-4)}`; // e.g., Foydalanuvchi 1234
+      const defaultLastName = `${telegramId.slice(-4)}`;
       
-      const info = db.prepare('INSERT INTO users (telegram_id, first_name, last_name, phone_number) VALUES (?, ?, ?, ?)').run(telegramId, defaultFirstName, defaultLastName, '');
-      db.prepare('INSERT INTO user_stats (user_id) VALUES (?)').run(info.lastInsertRowid);
+      await dbFirestore.collection('users').doc(telegramId).set({
+        telegram_id: telegramId,
+        first_name: defaultFirstName,
+        last_name: defaultLastName,
+        username: `@user_${telegramId}`,
+        phone_number: '',
+        registered_at: Date.now(),
+        total_tests: 0,
+        correct_answers: 0,
+        wrong_answers: 0,
+        time_spent: 0
+      });
       
       bot.sendMessage(chatId, "Ro'yxatdan muvaffaqiyatli o'tdingiz! Ismingizni Web App ichidagi Profil bo'limidan o'zgartirishingiz mumkin.");
       sendUserPanel(chatId);
@@ -164,14 +201,14 @@ export function initBot() {
       return;
     }
 
-    const stateObj = getState(userId);
+    const stateObj = await getState(userId);
     if (!stateObj) return;
 
     const { state, data } = stateObj;
 
     if (state === 'WAITING_FOR_TEST_PHOTO' && msg.photo) {
       const fileId = msg.photo[msg.photo.length - 1].file_id;
-      setState(userId, 'WAITING_FOR_TEST_ANSWER', { fileId });
+      await setState(userId, 'WAITING_FOR_TEST_ANSWER', { fileId });
       bot.sendMessage(chatId, "To'g'ri javobni belgilang:", {
         reply_markup: {
           inline_keyboard: [
@@ -181,7 +218,7 @@ export function initBot() {
         }
       });
     } else if (state === 'WAITING_FOR_BROADCAST_MESSAGE') {
-      setState(userId, 'WAITING_FOR_BROADCAST_CONFIRM', { messageId: msg.message_id });
+      await setState(userId, 'WAITING_FOR_BROADCAST_CONFIRM', { messageId: msg.message_id });
       bot.sendMessage(chatId, 'Ushbu xabarni barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?', {
         reply_markup: {
           inline_keyboard: [
@@ -194,20 +231,37 @@ export function initBot() {
 }
 
 export async function sendUsersExcel(chatId: number) {
-  const users = db.prepare('SELECT * FROM users').all() as any[];
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Foydalanuvchilar');
-  worksheet.columns = [
-    { header: 'ID', key: 'id', width: 10 },
-    { header: 'Telegram ID', key: 'telegram_id', width: 15 },
-    { header: 'Ism', key: 'first_name', width: 20 },
-    { header: 'Familiya', key: 'last_name', width: 20 },
-    { header: 'Telefon', key: 'phone_number', width: 15 },
-    { header: 'Sana', key: 'registered_at', width: 20 },
-  ];
-  users.forEach(u => worksheet.addRow(u));
-  const filePath = path.join(process.cwd(), 'users.xlsx');
-  await workbook.xlsx.writeFile(filePath);
-  await bot.sendDocument(chatId, filePath);
-  fs.unlinkSync(filePath);
+  if (!dbFirestore) return;
+  try {
+    const usersSnap = await dbFirestore.collection('users').get();
+    const users = usersSnap.docs.map((doc: any) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        telegram_id: data.telegram_id,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone_number: data.phone_number,
+        registered_at: new Date(data.registered_at || Date.now()).toLocaleString()
+      };
+    });
+    
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Foydalanuvchilar');
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 25 },
+      { header: 'Telegram ID', key: 'telegram_id', width: 15 },
+      { header: 'Ism', key: 'first_name', width: 20 },
+      { header: 'Familiya', key: 'last_name', width: 20 },
+      { header: 'Telefon', key: 'phone_number', width: 15 },
+      { header: 'Sana', key: 'registered_at', width: 25 },
+    ];
+    users.forEach((u: any) => worksheet.addRow(u));
+    const filePath = path.join(process.cwd(), 'users.xlsx');
+    await workbook.xlsx.writeFile(filePath);
+    await bot.sendDocument(chatId, filePath);
+    fs.unlinkSync(filePath);
+  } catch (e: any) {
+    if (e.code === 7) console.error("Firebase permission denied. Missing Service Account.");
+  }
 }

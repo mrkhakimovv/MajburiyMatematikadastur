@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and statistics combined.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "telegram_id": { "type": "string" },
+        "first_name": { "type": "string" },
+        "last_name": { "type": "string" },
+        "username": { "type": "string" },
+        "phone_number": { "type": "string" },
+        "password": { "type": "string" },
+        "profile_photo": { "type": "string" },
+        "status": { "type": "string" },
+        "accent_color": { "type": "string" },
+        "selected_badge": { "type": "string" },
+        "registered_at": { "type": "number", "description": "Timestamp" },
+        "total_tests": { "type": "number" },
+        "correct_answers": { "type": "number" },
+        "wrong_answers": { "type": "number" },
+        "time_spent": { "type": "number" },
+        "isAdmin": { "type": "boolean" }
+      },
+      "required": ["telegram_id"]
+    },
+    "Test": {
+      "title": "Test",
+      "description": "Test questions/answers.",
+      "type": "object",
+      "properties": {
+        "file_id": { "type": "string" },
+        "correct_answer": { "type": "string" },
+        "created_at": { "type": "number" }
+      }
+    },
+    "Channel": {
+      "title": "Channel",
+      "description": "Telegram channels to observe.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" }
+      }
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Messages between users and admins.",
+      "type": "object",
+      "properties": {
+        "sender_id": { "type": "string" },
+        "receiver_id": { "type": "string" },
+        "content": { "type": "string" },
+        "created_at": { "type": "number" },
+        "is_read": { "type": "boolean" }
+      }
+    },
+    "BotState": {
+      "title": "BotState",
+      "description": "Temporary bot state for users.",
+      "type": "object",
+      "properties": {
+        "state": { "type": "string" },
+        "data": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users and their stats."
+    },
+    "tests": {
+      "schema": { "$ref": "#/entities/Test" },
+      "description": "All mathematical tests."
+    },
+    "channels": {
+      "schema": { "$ref": "#/entities/Channel" },
+      "description": "Required Telegram channels."
+    },
+    "messages": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Chat messages."
+    },
+    "bot_states": {
+      "schema": { "$ref": "#/entities/BotState" },
+      "description": "State of user interactions with the bot."
+    }
+  }
+}
