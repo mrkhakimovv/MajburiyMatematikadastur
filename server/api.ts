@@ -378,7 +378,15 @@ apiRouter.post('/tests/submit', async (req, res) => {
 apiRouter.get('/admin/tests', async (req, res) => {
   if (!dbFirestore) return res.json([]);
   const snap = await dbFirestore.collection('tests').get();
-  const tests = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.created_at - a.created_at);
+  const tests = snap.docs.map(d => {
+    const data = d.data() as any;
+    if (data.file_id && data.file_id.startsWith('/uploads/')) {
+      data.image_url = data.file_id;
+    } else {
+      data.image_url = null;
+    }
+    return { id: d.id, ...data };
+  }).sort((a: any, b: any) => b.created_at - a.created_at);
   res.json(tests);
 });
 
@@ -576,7 +584,13 @@ apiRouter.get('/variants/:id/tests', async (req, res) => {
     for (const id of testIds) {
       const t = await dbFirestore.collection('tests').doc(id).get();
       if (t.exists) {
-        tests.push({ id: t.id, ...t.data() });
+        const testData = t.data() as any;
+        if (testData.file_id && testData.file_id.startsWith('/uploads/')) {
+          testData.image_url = testData.file_id;
+        } else {
+          testData.image_url = null;
+        }
+        tests.push({ id: t.id, ...testData });
       }
     }
     
