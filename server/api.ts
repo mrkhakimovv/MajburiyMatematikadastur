@@ -26,13 +26,20 @@ const ADMIN_ID = process.env.ADMIN_ID || '1986422890';
 
 apiRouter.post('/auth/check-username', async (req, res) => {
   if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
-  const { username } = req.body;
+  const { username, current_user_id } = req.body;
   const formattedUsername = username.startsWith('@') ? username : '@' + username;
   
   const snapshot = await dbFirestore.collection('users')
     .where('username', 'in', [formattedUsername, username]).get();
     
+  let available = false;
   if (snapshot.empty) {
+    available = true;
+  } else if (current_user_id && snapshot.docs.length === 1 && snapshot.docs[0].id === current_user_id) {
+    available = true;
+  }
+
+  if (available) {
     res.json({ available: true });
   } else {
     const baseUsername = username.replace('@', '');
@@ -109,6 +116,14 @@ apiRouter.post('/auth/login', async (req, res) => {
   
   if (!snapshot.empty) {
     const user = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as any;
+    
+    if (user.is_blocked) {
+      return res.status(403).json({ 
+        error: "Siz bloklangansiz, dasturdan foydalana olmaysiz.", 
+        isBlocked: true 
+      });
+    }
+
     if (user.telegram_id === ADMIN_ID) {
       user.isAdmin = true;
     }
@@ -187,6 +202,11 @@ apiRouter.get('/user/:telegram_id', async (req, res) => {
   if (!doc.exists) return res.status(404).json({ error: 'User not found' });
   
   const user = { id: doc.id, ...doc.data() } as any;
+
+  if (user.is_blocked) {
+    return res.status(403).json({ error: 'User is blocked', isBlocked: true });
+  }
+
   const stats = {
     correct_answers: user.correct_answers || 0,
     wrong_answers: user.wrong_answers || 0,
@@ -444,6 +464,37 @@ apiRouter.delete('/admin/channels/:id', async (req, res) => {
   if (!dbFirestore) return res.json({});
   await dbFirestore.collection('channels').doc(req.params.id).delete();
   res.json({ success: true });
+});
+
+apiRouter.get('/admin/users', async (req, res) => {
+  if (!dbFirestore) return res.json([]);
+  const usersSnap = await dbFirestore.collection('users').get();
+  res.json(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+});
+
+apiRouter.delete('/admin/users/:id', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  await dbFirestore.collection('users').doc(req.params.id).delete();
+  res.json({ success: true });
+});
+
+apiRouter.put('/admin/users/:id', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  const { first_name, last_name, username, phone_number, is_admin, is_blocked } = req.body;
+  try {
+    const updateData: any = {};
+    if (first_name !== undefined) updateData.first_name = first_name;
+    if (last_name !== undefined) updateData.last_name = last_name;
+    if (username !== undefined) updateData.username = username;
+    if (phone_number !== undefined) updateData.phone_number = phone_number;
+    if (is_admin !== undefined) updateData.is_admin = is_admin;
+    if (is_blocked !== undefined) updateData.is_blocked = is_blocked;
+    
+    await dbFirestore.collection('users').doc(req.params.id).update(updateData);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(400).json({ error: 'Xatolik yuz berdi' });
+  }
 });
 
 apiRouter.get('/leaderboard', async (req, res) => {

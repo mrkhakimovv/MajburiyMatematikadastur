@@ -24,14 +24,47 @@ export default function App() {
       setTelegramUser(tg.initDataUnsafe.user);
     }
 
-    const savedUserId = localStorage.getItem('authUserId');
-    const savedIsAdmin = localStorage.getItem('authIsAdmin') === 'true';
+    const checkAuth = async () => {
+      const savedUserId = localStorage.getItem('authUserId');
+      const savedIsAdmin = localStorage.getItem('authIsAdmin') === 'true';
 
-    if (savedUserId) {
-      setUserId(savedUserId);
-      setIsAdmin(savedIsAdmin);
-    }
-    setIsReady(true);
+      if (savedUserId) {
+        try {
+          const res = await fetch(`/api/user/${savedUserId}`);
+          if (res.status === 403) {
+            const data = await res.json();
+            if (data.isBlocked) {
+              setUserId(null);
+              setIsAdmin(false);
+              localStorage.removeItem('authUserId');
+              localStorage.removeItem('authIsAdmin');
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('auth:blocked'));
+              }, 100);
+            }
+          } else if (res.ok) {
+            setUserId(savedUserId);
+            setIsAdmin(savedIsAdmin);
+          } else {
+            // Might be deleted or network error, let's keep them logged in for now if network error
+            // If explicitly 404
+            if (res.status === 404) {
+              localStorage.removeItem('authUserId');
+              localStorage.removeItem('authIsAdmin');
+            } else {
+              setUserId(savedUserId);
+              setIsAdmin(savedIsAdmin);
+            }
+          }
+        } catch {
+          setUserId(savedUserId);
+          setIsAdmin(savedIsAdmin);
+        }
+      }
+      setIsReady(true);
+    };
+
+    checkAuth();
   }, []);
 
   const handleLogin = (user: any) => {

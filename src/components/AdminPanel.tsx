@@ -4,18 +4,21 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home, Video } from 'lucide-react';
+import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home, Video, Ban, Unlock } from 'lucide-react';
 import { Channel } from '../types';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants' | 'videos'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants' | 'videos' | 'users'>('main');
   const [testId, setTestId] = useState('');
   const [testData, setTestData] = useState<any>(null);
   const [allTests, setAllTests] = useState<any[]>([]);
   const [allVariants, setAllVariants] = useState<any[]>([]);
   const [videos, setVideos] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserForm, setEditUserForm] = useState<any>({});
   const [newVideoTitle, setNewVideoTitle] = useState('');
   const [newVideoUrl, setNewVideoUrl] = useState('');
   const [chats, setChats] = useState<any[]>([]);
@@ -23,6 +26,18 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [stats, setStats] = useState<any>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void} | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const customConfirm = (message: string, onConfirm: () => void) => {
+    setConfirmDialog({ isOpen: true, message, onConfirm });
+  };
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -49,10 +64,10 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
       try {
         tg.showAlert(msg);
       } catch (e) {
-        alert(msg);
+        showToast(msg);
       }
     } else {
-      alert(msg);
+      showToast(msg);
     }
   };
 
@@ -209,6 +224,80 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
       }
     } catch (e) {
       console.error('Failed to fetch all variants:', e);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        setUsers(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch users:', e);
+    }
+  };
+
+  const doDeleteUser = async (id: string) => {
+    customConfirm("Rostdan ham bu foydalanuvchini o'chirmoqchimisiz?", async () => {
+      try {
+        const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showAlert("Foydalanuvchi o'chirildi");
+          fetchUsers();
+        } else {
+          showAlert("Xatolik yuz berdi");
+        }
+      } catch {
+        showAlert("Tarmoq xatoligi");
+      }
+    });
+  };
+
+  const doToggleBlockUser = async (id: string, currentStatus: boolean | undefined) => {
+    const isBlocked = !currentStatus;
+    
+    const toggleRequest = async () => {
+      try {
+        const res = await fetch(`/api/admin/users/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_blocked: isBlocked })
+        });
+        if (res.ok) {
+          showAlert(isBlocked ? "Foydalanuvchi bloklandi" : "Blokdan chiqarildi");
+          fetchUsers();
+        } else {
+          showAlert("Xatolik yuz berdi");
+        }
+      } catch {
+        showAlert("Tarmoq xatoligi");
+      }
+    };
+
+    if (isBlocked) {
+      customConfirm("Rostdan ham bu foydalanuvchini bloklamoqchimisiz?", toggleRequest);
+    } else {
+      toggleRequest();
+    }
+  };
+
+  const doUpdateUser = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editUserForm)
+      });
+      if (res.ok) {
+        showAlert("Foydalanuvchi yangilandi");
+        setEditingUserId(null);
+        fetchUsers();
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch {
+      showAlert("Tarmoq xatoligi");
     }
   };
 
@@ -383,14 +472,10 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
           if (agreed) doDelete();
         });
       } catch (err) {
-        if (window.confirm("Rostdan ham ushbu testni o'chirmoqchimisiz?")) {
-          doDelete();
-        }
+        customConfirm("Rostdan ham ushbu testni o'chirmoqchimisiz?", doDelete);
       }
     } else {
-      if (window.confirm("Rostdan ham ushbu testni o'chirmoqchimisiz?")) {
-        doDelete();
-      }
+      customConfirm("Rostdan ham ushbu testni o'chirmoqchimisiz?", doDelete);
     }
   };
 
@@ -491,6 +576,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     if (activeTab === 'all-tests') fetchAllTests();
     if (activeTab === 'all-variants') fetchAllVariants();
     if (activeTab === 'videos') fetchVideos();
+    if (activeTab === 'users') fetchUsers();
   }, [activeTab]);
 
   useEffect(() => {
@@ -591,6 +677,11 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
               <button onClick={() => setActiveTab('videos')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
                 <Video size={20} className="text-red-500" />
                 <span className="font-medium">Videodarslar boshqaruvi</span>
+              </button>
+
+              <button onClick={() => setActiveTab('users')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
+                <Users size={20} className="text-teal-600" />
+                <span className="font-medium">Foydalanuvchilarni boshqarish</span>
               </button>
             </div>
           </div>
@@ -1381,9 +1472,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                     </div>
                     <button 
                       onClick={() => {
-                        if (window.confirm('Rostdan ham bu videoni o\'chirmoqchimisiz?')) {
-                          doDeleteVideo(video.id);
-                        }
+                        doDeleteVideo(video.id);
                       }}
                       className="text-red-500 hover:bg-red-50 p-2 rounded-lg shrink-0 transition-colors"
                     >
@@ -1394,6 +1483,93 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
               )}
             </div>
           </div>
+        </div>
+      )}
+      
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          <button onClick={() => setActiveTab('main')} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
+            <ArrowLeft size={20} /> Orqaga
+          </button>
+          
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <h2 className="text-lg font-bold mb-4 text-gray-900">Barcha foydalanuvchilar ({users.length})</h2>
+            <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+              {users.map(u => (
+                <div key={u.id} className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                  {editingUserId === u.id ? (
+                    <div className="space-y-2">
+                      <input type="text" value={editUserForm.first_name || ''} onChange={e => setEditUserForm({...editUserForm, first_name: e.target.value})} className="w-full border p-2 rounded outline-none" placeholder="Ism" />
+                      <input type="text" value={editUserForm.last_name || ''} onChange={e => setEditUserForm({...editUserForm, last_name: e.target.value})} className="w-full border p-2 rounded outline-none" placeholder="Familiya" />
+                      <input type="text" value={editUserForm.username || ''} onChange={e => setEditUserForm({...editUserForm, username: e.target.value})} className="w-full border p-2 rounded outline-none" placeholder="Username" />
+                      <input type="text" value={editUserForm.phone_number || ''} onChange={e => setEditUserForm({...editUserForm, phone_number: e.target.value})} className="w-full border p-2 rounded outline-none" placeholder="Telefon" />
+                      <label className="flex items-center gap-2 text-sm mt-2">
+                        <input type="checkbox" checked={editUserForm.is_admin || false} onChange={e => setEditUserForm({...editUserForm, is_admin: e.target.checked})} /> Admin huquqi
+                      </label>
+                      <div className="flex gap-2 mt-3">
+                        <button onClick={() => doUpdateUser(u.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-bold flex-1 transition-colors">Saqlash</button>
+                        <button onClick={() => setEditingUserId(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-bold flex-1 transition-colors">Bekor qilish</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-bold text-gray-900">{u.first_name} {u.last_name}</p>
+                        <p className="text-sm text-gray-500 font-medium">{u.username}</p>
+                        <p className="text-sm text-gray-500">{u.phone_number || 'Tel mavjud emas'}</p>
+                        {u.is_admin && <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded font-medium inline-block mt-1">Admin</span>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => doToggleBlockUser(u.id, u.is_blocked)} className={`p-2 rounded-lg transition-colors ${u.is_blocked ? 'text-orange-500 hover:bg-orange-50' : 'text-gray-500 hover:bg-gray-200'}`} title={u.is_blocked ? "Blokdan chiqarish" : "Bloklash"}>
+                          {u.is_blocked ? <Unlock size={18} /> : <Ban size={18} />}
+                        </button>
+                        <button onClick={() => { setEditingUserId(u.id); setEditUserForm(u); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                          <Edit size={18} />
+                        </button>
+                        <button onClick={() => doDeleteUser(u.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Custom Confirm Modal */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Tasdiqlash</h3>
+            <p className="text-gray-600 mb-6 font-medium">{confirmDialog.message}</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setConfirmDialog(null)}
+                className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl"
+              >
+                Bekor qilish
+              </button>
+              <button 
+                onClick={() => {
+                  setConfirmDialog(null);
+                  confirmDialog.onConfirm();
+                }}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white font-bold rounded-xl"
+              >
+                Ha, davom etish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-lg border border-gray-800 text-sm font-medium flex items-center gap-2 animate-in slide-in-from-top-4 fade-in">
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>

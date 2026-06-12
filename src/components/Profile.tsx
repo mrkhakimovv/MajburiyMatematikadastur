@@ -35,9 +35,12 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
   const [newAccentColor, setNewAccentColor] = useState('indigo');
   const [newSelectedBadge, setNewSelectedBadge] = useState('');
 
-  const [isUploading, setIsUploading] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isOwnProfile = !searchUsername || (user && user.telegram_id === userId);
 
@@ -72,6 +75,47 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
   useEffect(() => {
     fetchUser();
   }, [searchUsername, userId]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const rawUsername = newUsername.startsWith('@') ? newUsername.slice(1) : newUsername;
+    
+    if (rawUsername.length < 3) {
+      setUsernameAvailable(null);
+      setSuggestions([]);
+      return;
+    }
+
+    if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
+
+    checkTimeoutRef.current = setTimeout(async () => {
+      setCheckingUsername(true);
+      try {
+        const res = await fetch('/api/auth/check-username', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: rawUsername, current_user_id: userId })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUsernameAvailable(data.available);
+          setSuggestions(data.suggestions || []);
+        } else {
+          setUsernameAvailable(false);
+          setSuggestions([]);
+        }
+      } catch (e) {
+        setUsernameAvailable(null);
+        setSuggestions([]);
+      } finally {
+        setCheckingUsername(false);
+      }
+    }, 600);
+
+    return () => {
+      if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
+    };
+  }, [newUsername, isEditing, userId]);
 
   const saveName = async () => {
     if (!newName.trim() || !newUsername.trim() || !newPhone.trim()) {
@@ -128,40 +172,6 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
     }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !isOwnProfile) return;
-
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append('photo', file);
-
-    try {
-      await fetch(`/api/user/${userId}/photo`, {
-        method: 'POST',
-        body: formData,
-      });
-      fetchUser();
-    } catch (error) {
-      console.error('Error uploading photo:', error);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const deletePhoto = async () => {
-    if (!user?.profile_photo || !isOwnProfile) return;
-    
-    try {
-      await fetch(`/api/user/${userId}/photo`, {
-        method: 'DELETE',
-      });
-      fetchUser();
-    } catch (error) {
-      console.error('Error deleting photo:', error);
-    }
-  };
-
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-[100dvh] bg-gray-50 p-4 text-center">
@@ -207,24 +217,10 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
         
         <div className="relative z-10 pt-16 px-6 pb-6 text-center">
           <div className="relative inline-block mx-auto mb-4">
-            <div className="w-28 h-28 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center overflow-hidden relative group">
-              {isUploading ? (
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-              ) : user.profile_photo ? (
-                <img src={user.profile_photo} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-indigo-50 flex items-center justify-center">
-                  <UserIcon size={48} className="text-indigo-300" />
-                </div>
-              )}
-              {isOwnProfile && (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-sm"
-                >
-                  <Camera className="text-white" size={28} />
-                </div>
-              )}
+            <div className="w-28 h-28 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center overflow-hidden relative">
+              <div className="w-full h-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-4xl uppercase">
+                {user.first_name ? user.first_name.charAt(0) : 'U'}
+              </div>
             </div>
             
             {/* Rank Badge */}
@@ -232,16 +228,6 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
               <Trophy size={14} /> #{user.rank}
             </div>
           </div>
-
-          {isOwnProfile && (
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handlePhotoUpload} 
-              accept="image/*" 
-              className="hidden" 
-            />
-          )}
 
           <div className="flex flex-col items-center gap-2 mb-1">
             {isEditing && isOwnProfile ? (
@@ -261,13 +247,46 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
                   className="bg-white px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-900 outline-none w-full"
                   placeholder="Familiya"
                 />
-                <input 
-                  type="text" 
-                  value={newUsername} 
-                  onChange={e => setNewUsername(e.target.value)}
-                  className="bg-white px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-900 outline-none w-full"
-                  placeholder="Username"
-                />
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={newUsername} 
+                    onChange={e => setNewUsername(e.target.value)}
+                    className={`bg-white px-3 py-2 rounded-lg border text-sm font-medium text-gray-900 outline-none w-full pr-10 ${
+                      newUsername.length < 3 ? 'border-gray-200 focus:border-indigo-500' :
+                      usernameAvailable === true ? 'border-emerald-400 focus:border-emerald-500 bg-emerald-50/20' :
+                      usernameAvailable === false ? 'border-red-400 focus:border-red-500 bg-red-50/20' :
+                      'border-gray-200 focus:border-indigo-500'
+                    }`}
+                    placeholder="Username"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {checkingUsername ? (
+                      <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
+                    ) : newUsername.length >= 3 && usernameAvailable === true ? (
+                      <CheckCircle size={18} className="text-emerald-500" />
+                    ) : newUsername.length >= 3 && usernameAvailable === false ? (
+                      <XCircle size={18} className="text-red-500" />
+                    ) : null}
+                  </div>
+                </div>
+                {newUsername.length >= 3 && usernameAvailable === false && (
+                  <div className="flex flex-col gap-1 items-start text-left mt-0.5 mb-1 px-1">
+                    <p className="text-xs font-medium text-red-500">Bu username band. Tavsiyalar:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {suggestions.map((sug, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setNewUsername(sug)}
+                          className="px-2 py-1 bg-white text-indigo-600 text-xs rounded-md border border-indigo-100 shadow-sm hover:bg-indigo-50 transition-colors"
+                        >
+                          {sug}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <input 
                   type="tel" 
                   value={newPhone} 
@@ -277,7 +296,13 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
                 />
                 <div className="flex gap-2 mt-2">
                   <button onClick={() => setIsEditing(false)} className="flex-1 bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm">Bekor qilish</button>
-                  <button onClick={saveName} className="flex-1 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm">Saqlash</button>
+                  <button 
+                    onClick={saveName} 
+                    disabled={checkingUsername || (newUsername.length >= 3 && usernameAvailable === false)}
+                    className="flex-1 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm disabled:bg-indigo-400"
+                  >
+                    Saqlash
+                  </button>
                 </div>
               </div>
             ) : (
@@ -312,27 +337,7 @@ export default function Profile({ userId, onLogout }: { userId: string, onLogout
             )}
           </div>
 
-          {isOwnProfile && !isCustomizing && (
-            <div className="flex justify-center gap-3">
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className={`flex-1 flex items-center justify-center gap-2 text-sm font-bold text-white ${colorMap[user.accent_color || 'indigo']?.bg || 'bg-indigo-600'} ${colorMap[user.accent_color || 'indigo']?.hover || 'hover:bg-indigo-700'} px-4 py-3 rounded-xl shadow-sm transition-colors disabled:opacity-70`}
-              >
-                <Camera size={18} /> {user.profile_photo ? 'Rasmni almashtirish' : 'Rasm joylash'}
-              </button>
-              {user.profile_photo && (
-                <button 
-                  onClick={deletePhoto}
-                  className="flex items-center justify-center gap-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 px-4 py-3 rounded-xl transition-colors"
-                  title="Rasmni o'chirish"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-            </div>
-          )}
-          
+
           {isOwnProfile && isCustomizing && (
             <div className="mt-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-left">
               <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Palette size={18} /> Profilni moslashtirish</h3>

@@ -16,6 +16,7 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isBlockedUser, setIsBlockedUser] = useState(false);
   
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
@@ -24,6 +25,11 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
 
   // Auto-login via Telegram WebApp
   useEffect(() => {
+    const handleBlocked = () => {
+      setIsBlockedUser(true);
+    };
+    window.addEventListener('auth:blocked', handleBlocked as EventListener);
+    
     if (telegramUser) {
       setFirstName(telegramUser.first_name || '');
       setLastName(telegramUser.last_name || '');
@@ -37,6 +43,11 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
           if (res.ok) {
             const data = await res.json();
             onLogin(data);
+          } else if (res.status === 403) {
+            const errData = await res.json();
+            if (errData.isBlocked) {
+              setIsBlockedUser(true);
+            }
           }
         } catch (e) {
           console.error('Auto login failed', e);
@@ -44,7 +55,36 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
       };
       autoLogin();
     }
+    
+    return () => {
+      window.removeEventListener('auth:blocked', handleBlocked as EventListener);
+    }
   }, [telegramUser, onLogin]);
+
+  if (isBlockedUser) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 bg-gray-50 text-center relative overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-400/20 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-red-600/20 blur-[120px] rounded-full pointer-events-none" />
+        
+        <div className="bg-white/80 backdrop-blur-xl border border-white p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] max-w-sm w-full relative z-10">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 relative">
+            <Lock size={32} />
+          </div>
+          <h2 className="text-2xl font-black text-gray-900 mb-2">Akkaunt bloklangan</h2>
+          <p className="text-gray-600 font-medium mb-6">Siz bloklangansiz, dasturdan foydalana olmaysiz. Blokni ochish uchun admin bilan bog'laning.</p>
+          <a
+            href="https://t.me/quvonchbek_hakimov"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl font-bold border border-transparent shadow-[0_4px_14px_0_rgba(220,38,38,0.39)] text-white bg-red-600 hover:bg-red-700 hover:-translate-y-0.5 transition-all outline-none"
+          >
+            Adminga murojaat
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   // Username availability check with debounce (600ms)
   useEffect(() => {
@@ -132,6 +172,9 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
           onLogin(data.user);
         } else {
           setError(data.error || 'Login yoki parol xato');
+          if (data.isBlocked) {
+            setIsBlockedUser(true);
+          }
         }
       } else {
         if (usernameAvailable === false) {
