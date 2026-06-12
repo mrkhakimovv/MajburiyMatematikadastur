@@ -533,6 +533,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   };
 
   useEffect(() => {
+    fetchChats();
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
         setShowEmojiPicker(false);
@@ -698,9 +699,16 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                 <span className="font-medium">Testni tahrirlash</span>
               </button>
 
-              <button onClick={() => setActiveTab('chats')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
-                <MessageCircle size={20} className="text-blue-600" />
-                <span className="font-medium">Foydalanuvchilar bilan chat</span>
+              <button onClick={() => setActiveTab('chats')} className="w-full flex items-center justify-between gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
+                <div className="flex items-center gap-3">
+                  <MessageCircle size={20} className="text-blue-600" />
+                  <span className="font-medium">Foydalanuvchilar bilan chat</span>
+                </div>
+                {chats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0) > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                    {chats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0)}
+                  </span>
+                )}
               </button>
 
               <button onClick={() => setActiveTab('stats')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">

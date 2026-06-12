@@ -105,58 +105,6 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
         </div>
       </div>
 
-      <form ref={searchRef} onSubmit={handleSearch} className="mb-6 relative">
-        <div className="relative flex items-center">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search size={20} className="text-gray-400" />
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setShowSuggestions(true);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-            placeholder="Username orqali qidirish..."
-            className="w-full pl-11 pr-24 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-          />
-          <button
-            type="submit"
-            disabled={!searchQuery.trim()}
-            className="absolute right-2 top-2 bottom-2 bg-indigo-600 text-white px-4 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Qidirish
-          </button>
-        </div>
-
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-            {suggestions.map((user) => (
-              <button
-                key={user.id}
-                type="button"
-                onClick={() => handleSuggestionClick(user.username)}
-                className="w-full flex items-center p-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 text-left"
-              >
-                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden mr-3 flex-shrink-0">
-                  {user.profile_photo ? (
-                    <img src={user.profile_photo} alt={user.first_name} className="w-full h-full object-cover" />
-                  ) : (
-                    <UserIcon size={20} className="text-indigo-400" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">
-                    {user.first_name} {user.last_name}
-                  </p>
-                  <p className="text-sm text-gray-500 truncate">{user.username}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </form>
 
       <div className="space-y-4">
         <button 
