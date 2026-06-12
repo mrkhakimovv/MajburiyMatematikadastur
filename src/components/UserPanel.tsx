@@ -239,29 +239,26 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
 
         <div className="pt-4 space-y-3">
           <a 
-            href="https://t.me/hakimov_math" 
+            href="https://t.me/hakimov_matematika" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="w-full flex items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-indigo-100 active:scale-95 transition-transform relative overflow-hidden group"
+            className="w-full flex items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-indigo-100 active:scale-95 transition-transform relative overflow-hidden group animate-ad-shine"
           >
             <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-100 rounded-full -mr-8 -mt-8 opacity-50 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center mr-4 shadow-md z-10">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </div>
             <div className="text-left flex-1 z-10">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Reklama</span>
-              </div>
               <h3 className="font-bold text-gray-900 text-base leading-tight">Matematikadan foydali darslar</h3>
-              <p className="text-sm text-indigo-600 font-medium mt-0.5">@hakimov_math</p>
+              <p className="text-sm text-indigo-600 font-medium mt-0.5">@hakimov_matematika</p>
             </div>
           </a>
 
           <a 
-            href="https://t.me/Majburiy_Matematika_BMBA" 
+            href="https://t.me/Matematika_PanjiSoatov" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="w-full flex items-center p-4 bg-gradient-to-r from-sky-50 to-blue-50 rounded-xl shadow-sm border border-blue-100 active:scale-95 transition-transform relative overflow-hidden group"
+            className="w-full flex items-center p-4 bg-gradient-to-r from-sky-50 to-blue-50 rounded-xl shadow-sm border border-blue-100 active:scale-95 transition-transform relative overflow-hidden group animate-ad-shine"
           >
             <div className="absolute top-0 right-0 w-16 h-16 bg-blue-100 rounded-full -mr-8 -mt-8 opacity-50 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center mr-4 shadow-md z-10">
@@ -269,7 +266,7 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
             </div>
             <div className="text-left flex-1 z-10">
               <h3 className="font-bold text-gray-900 text-base leading-tight">Majburiy Matematika kanali</h3>
-              <p className="text-sm text-blue-600 font-medium mt-0.5">@Majburiy_Matematika_BMBA</p>
+              <p className="text-sm text-blue-600 font-medium mt-0.5">@Matematika_PanjiSoatov</p>
             </div>
           </a>
         </div>
