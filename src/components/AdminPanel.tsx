@@ -10,17 +10,22 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants' | 'videos' | 'users'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants' | 'variant-stats' | 'videos' | 'users'>('main');
   const [testId, setTestId] = useState('');
   const [testData, setTestData] = useState<any>(null);
   const [allTests, setAllTests] = useState<any[]>([]);
   const [allVariants, setAllVariants] = useState<any[]>([]);
+  const [selectedVariantStats, setSelectedVariantStats] = useState<any>(null);
+  const [variantStatsUsers, setVariantStatsUsers] = useState<any>(null);
   const [videos, setVideos] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserForm, setEditUserForm] = useState<any>({});
   const [newVideoTitle, setNewVideoTitle] = useState('');
   const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
+  const [editVideoTitle, setEditVideoTitle] = useState('');
+  const [editVideoUrl, setEditVideoUrl] = useState('');
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -350,6 +355,28 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     }
   };
 
+  const doUpdateVideo = async () => {
+    if (!editingVideoId || !editVideoTitle.trim() || !editVideoUrl.trim()) return;
+    try {
+      const res = await fetch(`/api/admin/videos/${editingVideoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editVideoTitle, url: editVideoUrl })
+      });
+      if (res.ok) {
+        showAlert("Video yangilandi");
+        setEditingVideoId(null);
+        setEditVideoTitle('');
+        setEditVideoUrl('');
+        fetchVideos();
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch {
+      showAlert("Tarmoq xatoligi");
+    }
+  };
+
   const updateTestAnswer = async () => {
     const answerToSave = editTestAnswer || testData.correct_answer;
     
@@ -657,6 +684,11 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
               <button onClick={() => setActiveTab('all-variants')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
                 <List size={20} className="text-purple-600" />
                 <span className="font-medium">Barcha variantlar ro'yxati</span>
+              </button>
+
+              <button onClick={() => { setActiveTab('variant-stats'); fetchAllVariants(); }} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
+                <BarChart2 size={20} className="text-pink-600" />
+                <span className="font-medium">Variantlar statistikasi</span>
               </button>
 
               <button onClick={() => setActiveTab('edit')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
@@ -1360,6 +1392,84 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
         </div>
       )}
 
+      {activeTab === 'variant-stats' && (
+        <div className="space-y-4">
+          <button onClick={() => { setActiveTab('main'); setSelectedVariantStats(null); }} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
+            <ArrowLeft size={20} /> Orqaga
+          </button>
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 border-b pb-3 border-gray-100">Variantlar statistikasi</h2>
+            
+            {!selectedVariantStats ? (
+              <div className="space-y-3">
+                {allVariants.map(variant => (
+                  <button 
+                    key={variant.id}
+                    onClick={async () => {
+                      setSelectedVariantStats(variant);
+                      try {
+                        const res = await fetch(`/api/admin/variants/${variant.id}/results`);
+                        if (res.ok) {
+                          setVariantStatsUsers(await res.json());
+                        }
+                      } catch (e) {
+                         console.error(e);
+                      }
+                    }}
+                    className="w-full text-left bg-gray-50 border border-gray-200 p-4 rounded-xl hover:bg-indigo-50 transition-colors flex justify-between items-center"
+                  >
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-lg">{variant.name}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{variant.tests?.length || 0} ta savol</p>
+                    </div>
+                    <ArrowLeft size={20} className="rotate-180 text-gray-400" />
+                  </button>
+                ))}
+                {allVariants.length === 0 && (
+                   <p className="text-center text-gray-500 p-4">Variantlar mavjud emas</p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <button onClick={() => { setSelectedVariantStats(null); setVariantStatsUsers(null); }} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-4 -ml-2">
+                  <ArrowLeft size={18} /> Variantlarga qaytish
+                </button>
+                <div className="border-b border-gray-100 pb-4 mb-4">
+                  <h3 className="font-bold text-xl text-gray-900">{selectedVariantStats.name} statistikasi</h3>
+                </div>
+                
+                {!variantStatsUsers ? (
+                  <div className="flex justify-center p-8">
+                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  </div>
+                ) : variantStatsUsers.length === 0 ? (
+                  <p className="text-center text-gray-500 p-4">Hali hech kim ushbu variantni ishlamagan.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {variantStatsUsers.map((userStats: any, idx: number) => (
+                      <div key={userStats.id || idx} className="bg-gray-50 p-4 rounded-xl flex items-center justify-between border border-gray-200">
+                        <div>
+                           <p className="font-bold text-gray-900">{userStats.user_name || userStats.username || 'Noma\'lum'}</p>
+                           <p className="text-xs text-gray-500 mt-0.5">{userStats.phone_number || ''}</p>
+                           <p className="text-xs text-gray-400">{new Date(userStats.created_at).toLocaleString('uz-UZ')}</p>
+                        </div>
+                        <div className="text-right">
+                           <div className="flex gap-2">
+                             <span className="text-emerald-600 bg-emerald-100 px-2 py-1 flex items-center justify-center rounded font-bold text-sm min-w-8" title="To'g'ri javoblar">{userStats.correct}</span>
+                             <span className="text-rose-600 bg-rose-100 px-2 py-1 flex items-center justify-center rounded font-bold text-sm min-w-8" title="Xato javoblar">{userStats.wrong}</span>
+                           </div>
+                           <p className="text-xs font-medium text-gray-500 mt-1">{userStats.time_spent}s</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'stats' && (
         <div className="space-y-4">
           <button onClick={() => setActiveTab('main')} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
@@ -1467,17 +1577,56 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className="font-bold text-sm text-gray-900 line-clamp-2">{video.title}</p>
-                      <p className="text-xs text-gray-500 mt-1 truncate">{new Date(video.created_at).toLocaleDateString()}</p>
+                      {editingVideoId === video.id ? (
+                        <div className="space-y-2">
+                           <input 
+                             type="text" 
+                             value={editVideoTitle} 
+                             onChange={(e) => setEditVideoTitle(e.target.value)} 
+                             className="w-full text-sm font-bold text-gray-900 border border-gray-200 rounded px-2 py-1 outline-none focus:border-indigo-500" 
+                             placeholder="Sarlavha"
+                           />
+                           <input 
+                             type="text" 
+                             value={editVideoUrl} 
+                             onChange={(e) => setEditVideoUrl(e.target.value)} 
+                             className="w-full text-xs text-gray-700 border border-gray-200 rounded px-2 py-1 outline-none focus:border-indigo-500" 
+                             placeholder="YouTube havolasi"
+                           />
+                           <div className="flex gap-2 justify-end">
+                             <button onClick={() => setEditingVideoId(null)} className="text-xs text-gray-500 hover:text-gray-700">Bekor qilish</button>
+                             <button onClick={doUpdateVideo} className="text-xs text-indigo-600 font-medium hover:text-indigo-800">Saqlash</button>
+                           </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-bold text-sm text-gray-900 line-clamp-2">{video.title}</p>
+                          <p className="text-xs text-gray-500 mt-1 truncate">{new Date(video.created_at).toLocaleDateString()}</p>
+                        </>
+                      )}
                     </div>
-                    <button 
-                      onClick={() => {
-                        doDeleteVideo(video.id);
-                      }}
-                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg shrink-0 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    {editingVideoId !== video.id && (
+                      <div className="flex shrink-0">
+                        <button 
+                          onClick={() => {
+                            setEditingVideoId(video.id);
+                            setEditVideoTitle(video.title);
+                            setEditVideoUrl(video.url || (video.videoId ? `https://youtube.com/watch?v=${video.videoId}` : ''));
+                          }}
+                          className="text-emerald-600 hover:bg-emerald-50 p-2 rounded-lg transition-colors"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            doDeleteVideo(video.id);
+                          }}
+                          className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}

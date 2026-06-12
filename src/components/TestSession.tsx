@@ -103,6 +103,10 @@ export default function TestSession({ userId }: { userId: string }) {
     setIsFinished(true);
 
     try {
+      let variant_id = null;
+      if (type.startsWith('variant-')) {
+        variant_id = type.split('-')[1];
+      }
       await fetch('/api/tests/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,7 +114,8 @@ export default function TestSession({ userId }: { userId: string }) {
           telegram_id: userId,
           correct: finalCorrect,
           wrong: finalWrong,
-          time_spent: timeSpent
+          time_spent: timeSpent,
+          variant_id: variant_id
         })
       });
     } catch (e) {

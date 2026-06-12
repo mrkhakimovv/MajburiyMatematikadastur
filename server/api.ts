@@ -381,7 +381,7 @@ apiRouter.get('/tests/random', async (req, res) => {
 
 apiRouter.post('/tests/submit', async (req, res) => {
   if (!dbFirestore) return res.status(500).json({ error: 'Db not connected' });
-  const { telegram_id, correct, wrong, time_spent } = req.body;
+  const { telegram_id, correct, wrong, time_spent, variant_id } = req.body;
   const docRef = dbFirestore.collection('users').doc(telegram_id);
   const doc = await docRef.get();
   if (!doc.exists) return res.status(404).json({ error: 'User not found' });
@@ -392,6 +392,21 @@ apiRouter.post('/tests/submit', async (req, res) => {
     wrong_answers: (data.wrong_answers || 0) + wrong,
     time_spent: (data.time_spent || 0) + time_spent
   });
+
+  if (variant_id) {
+    await dbFirestore.collection('variant_results').add({
+      variant_id: variant_id,
+      telegram_id: telegram_id,
+      user_name: data.first_name + (data.last_name ? ' ' + data.last_name : ''),
+      username: data.username || '',
+      phone_number: data.phone_number || '',
+      correct: correct,
+      wrong: wrong,
+      time_spent: time_spent,
+      created_at: Date.now()
+    });
+  }
+
   res.json({ success: true });
 });
 
@@ -656,6 +671,33 @@ apiRouter.post('/admin/variants', async (req, res) => {
   }
 });
 
+apiRouter.get('/admin/variants/:id/results', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json([]);
+  try {
+    const snap = await dbFirestore.collection('variant_results')
+      .where('variant_id', '==', req.params.id)
+      .orderBy('created_at', 'desc')
+      .get();
+    
+    // We can also aggregate by telegram_id to keep the best or latest result if desired, but returning all is fine.
+    const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Deduplicate by telegram_id to keep only the latest attempt
+    const deduplicated = [];
+    const seen = new Set();
+    for (const r of results) {
+       if (!seen.has(r.telegram_id)) {
+          seen.add(r.telegram_id);
+          deduplicated.push(r);
+       }
+    }
+    
+    res.json(deduplicated);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json([]);
+  }
+});
+
 apiRouter.delete('/admin/variants/:id', async (req, res) => {
   if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
   await dbFirestore.collection('variants').doc(req.params.id).delete();
@@ -747,4 +789,34 @@ apiRouter.delete('/admin/videos/:id', async (req, res) => {
   if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
   await dbFirestore.collection('videos').doc(req.params.id).delete();
   res.json({ success: true });
+});
+
+apiRouter.put('/admin/videos/:id', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  try {
+    const { title, url } = req.body;
+    let videoId = '';
+    
+    if (url) {
+      try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname.includes('youtube.com')) {
+          videoId = urlObj.searchParams.get('v') || '';
+        } else if (urlObj.hostname.includes('youtu.be')) {
+          videoId = urlObj.pathname.slice(1);
+        }
+      } catch (e) {}
+    }
+
+    const updateData: any = { title };
+    if (url !== undefined) {
+      updateData.url = url;
+      updateData.videoId = videoId || url; // Fallback
+    }
+
+    await dbFirestore.collection('videos').doc(req.params.id).update(updateData);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
