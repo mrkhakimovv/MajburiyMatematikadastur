@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home } from 'lucide-react';
 import { Channel } from '../types';
@@ -21,14 +25,18 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const [newTestImage, setNewTestImage] = useState<File | null>(null);
+  const [newTestText, setNewTestText] = useState<string>('');
   const [newTestAnswer, setNewTestAnswer] = useState<string>('');
+  const [newTestOptions, setNewTestOptions] = useState<{ A: string, B: string, C: string, D: string }>({ A: '', B: '', C: '', D: '' });
   const [editTestAnswer, setEditTestAnswer] = useState<string>('');
+  const [editTestOptions, setEditTestOptions] = useState<{ A: string, B: string, C: string, D: string }>({ A: '', B: '', C: '', D: '' });
   const [editTestImage, setEditTestImage] = useState<File | null>(null);
+  const [editTestText, setEditTestText] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
 
   const [variantMethod, setVariantMethod] = useState<'random' | 'manual'>('random');
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
-  const [manualTests, setManualTests] = useState<Array<{file: File | null, answer: string, previewUrl: string | null}>>(Array.from({length: 10}, () => ({file: null, answer: '', previewUrl: null})));
+  const [manualTests, setManualTests] = useState<Array<{file: File | null, text: string, answer: string, options: {A: string, B: string, C: string, D: string}, previewUrl: string | null}>>(Array.from({length: 10}, () => ({file: null, text: '', answer: '', options: {A: '', B: '', C: '', D: ''}, previewUrl: null})));
   const [isCreatingVariant, setIsCreatingVariant] = useState(false);
 
   const tg = (window as any).Telegram?.WebApp;
@@ -48,9 +56,9 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const createVariant = async () => {
     // allow any amount for random, it will max out at 10 on backend.
     if (variantMethod === 'manual') {
-      const incomplete = manualTests.some(t => !t.file || !t.answer);
+      const incomplete = manualTests.some(t => (!t.file && !t.text.trim()) || !t.answer);
       if (incomplete) {
-        showAlert("Iltimos, barcha 10 ta test uchun rasm va javobni kiriting");
+        showAlert("Iltimos, barcha 10 ta test uchun rasm yoki matn va javobni kiriting");
         return;
       }
     }
@@ -63,7 +71,12 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
         const uploadedIds: string[] = [];
         for (const test of manualTests) {
           const formData = new FormData();
-          formData.append('image', test.file as Blob);
+          if (test.file) formData.append('image', test.file as Blob);
+          if (test.text.trim()) formData.append('text_content', test.text.trim());
+          if (test.options.A.trim()) formData.append('option_a', test.options.A.trim());
+          if (test.options.B.trim()) formData.append('option_b', test.options.B.trim());
+          if (test.options.C.trim()) formData.append('option_c', test.options.C.trim());
+          if (test.options.D.trim()) formData.append('option_d', test.options.D.trim());
           formData.append('correct_answer', test.answer);
 
           const res = await fetch('/api/admin/tests', {
@@ -95,7 +108,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
         const data = await res.json();
         showAlert(`${data.name} muvaffaqiyatli yaratildi!`);
         setActiveTab('main');
-        setManualTests(Array.from({length: 10}, () => ({file: null, answer: '', previewUrl: null})));
+        setManualTests(Array.from({length: 10}, () => ({file: null, text: '', answer: '', options: {A: '', B: '', C: '', D: ''}, previewUrl: null})));
       } else {
          const err = await res.json();
          showAlert(err.error || "Xatolik yuz berdi.");
@@ -108,15 +121,20 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   };
 
   const createTestWeb = async () => {
-    if (!newTestImage || !newTestAnswer) {
-      showAlert("Iltimos, rasm va to'g'ri javobni tanlang");
+    if ((!newTestImage && !newTestText.trim()) || !newTestAnswer) {
+      showAlert("Iltimos, rasm yoki matn va to'g'ri javobni kiriting");
       return;
     }
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append('image', newTestImage);
+    if (newTestImage) formData.append('image', newTestImage);
+    if (newTestText.trim()) formData.append('text_content', newTestText.trim());
     formData.append('correct_answer', newTestAnswer);
+    if (newTestOptions.A.trim()) formData.append('option_a', newTestOptions.A.trim());
+    if (newTestOptions.B.trim()) formData.append('option_b', newTestOptions.B.trim());
+    if (newTestOptions.C.trim()) formData.append('option_c', newTestOptions.C.trim());
+    if (newTestOptions.D.trim()) formData.append('option_d', newTestOptions.D.trim());
 
     try {
       const res = await fetch('/api/admin/tests', {
@@ -128,7 +146,9 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
         const data = await res.json();
         showAlert(`Test muvaffaqiyatli yaratildi! ID: ${data.id}`);
         setNewTestImage(null);
+        setNewTestText('');
         setNewTestAnswer('');
+        setNewTestOptions({ A: '', B: '', C: '', D: '' });
         setActiveTab('main');
       } else {
         showAlert("Xatolik yuz berdi");
@@ -149,6 +169,13 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
         const data = await res.json();
         setTestData(data);
         setEditTestAnswer(data.correct_answer);
+        setEditTestText(data.text_content || '');
+        setEditTestOptions({
+          A: data.option_a || '',
+          B: data.option_b || '',
+          C: data.option_c || '',
+          D: data.option_d || ''
+        });
         setEditTestImage(null);
         if (idToFetch) setTestId(idToFetch);
       } else {
@@ -187,6 +214,11 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     
     const formData = new FormData();
     formData.append('correct_answer', answerToSave);
+    formData.append('text_content', editTestText);
+    formData.append('option_a', editTestOptions.A);
+    formData.append('option_b', editTestOptions.B);
+    formData.append('option_c', editTestOptions.C);
+    formData.append('option_d', editTestOptions.D);
     if (editTestImage) {
       formData.append('image', editTestImage);
     }
@@ -654,13 +686,23 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
             </div>
 
             {variantMethod === 'manual' && (
-              <div className="mb-6 space-y-6 max-h-96 overflow-y-auto pr-2">
+              <div className="mb-6 space-y-6 max-h-[800px] overflow-y-auto pr-2">
                 <p className="font-medium text-gray-700">10 ta savolni kiriting</p>
                 {manualTests.map((t, idx) => (
                   <div key={idx} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                    <p className="font-bold text-gray-900 mb-3 text-lg">{idx + 1}-savol rasmi (yoki joylang)</p>
+                    <p className="font-bold text-gray-900 mb-3 text-lg">{idx + 1}-savol matni yoki rasmi</p>
                     
                     <div className="mb-4">
+                      <textarea
+                        value={t.text}
+                        onChange={(e) => {
+                          const updated = [...manualTests];
+                          updated[idx].text = e.target.value;
+                          setManualTests(updated);
+                        }}
+                        placeholder="Matnli testni kiriting..."
+                        className="w-full border-2 border-gray-200 rounded-xl p-3 h-24 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none resize-y mb-2"
+                      />
                       <div 
                         className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-100 transition-colors cursor-pointer bg-white"
                         onClick={() => document.getElementById(`manual-test-upload-${idx}`)?.click()}
@@ -706,6 +748,35 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                       </div>
                     </div>
                     
+                    <div className="mb-4 space-y-3">
+                      <label className="block text-sm font-medium text-gray-700">Variantlarni kiritish (ixtiyoriy, LaTeX qabul qiladi)</label>
+                      {(['A', 'B', 'C', 'D'] as const).map(opt => (
+                        <div key={opt}>
+                          <div className="flex bg-white rounded-lg border border-gray-200 overflow-hidden">
+                            <span className="bg-gray-100 px-3 py-2 font-bold text-gray-600 border-r border-gray-200 flex items-center justify-center">{opt}</span>
+                            <input 
+                              type="text" 
+                              value={t.options[opt]}
+                              onChange={(e) => {
+                                const updated = [...manualTests];
+                                updated[idx].options[opt] = e.target.value;
+                                setManualTests(updated);
+                              }}
+                              placeholder={`${opt} varianti matni...`}
+                              className="flex-1 bg-transparent px-3 py-2 outline-none focus:bg-gray-50 text-sm"
+                            />
+                          </div>
+                          {t.options[opt] && (
+                            <div className="mt-1 ml-10 text-xs bg-gray-100/50 px-2 py-1 rounded text-gray-700">
+                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                {t.options[opt]}
+                              </ReactMarkdown>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">To'g'ri javob</label>
                       <div className="grid grid-cols-4 gap-2">
@@ -753,7 +824,27 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
             <h2 className="text-lg font-bold mb-4">Yangi test yaratish</h2>
             
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Test rasmi (yoki Ctrl+V orqali joylang)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Matnli test (LaTeX formatini qo'llab-quvvatlaydi, masalan: $E=mc^2$)</label>
+              <textarea
+                value={newTestText}
+                onChange={(e) => setNewTestText(e.target.value)}
+                placeholder="Test savolini shu yerga kiriting..."
+                className="w-full border-2 border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-y"
+              />
+              {newTestText && (
+                <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200 prose prose-sm max-w-none">
+                  <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Oldindan ko'rish:</p>
+                  <div className="text-gray-800">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                      {newTestText}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Yoki test rasmi (Ctrl+V)</label>
               <div 
                 className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => document.getElementById('test-image-upload')?.click()}
@@ -781,6 +872,31 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mb-6 space-y-3">
+              <label className="block text-sm font-medium text-gray-700">Variantlarni kiritish (ixtiyoriy, LaTeX qabul qiladi)</label>
+              {(['A', 'B', 'C', 'D'] as const).map(opt => (
+                <div key={opt}>
+                  <div className="flex bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                    <span className="bg-gray-100 px-4 py-2 font-bold text-gray-600 border-r border-gray-200 flex items-center justify-center">{opt}</span>
+                    <input 
+                      type="text" 
+                      value={newTestOptions[opt]}
+                      onChange={(e) => setNewTestOptions({...newTestOptions, [opt]: e.target.value})}
+                      placeholder={`${opt} varianti matnini kiriting...`}
+                      className="flex-1 bg-transparent px-3 py-2 outline-none focus:bg-white"
+                    />
+                  </div>
+                  {newTestOptions[opt] && (
+                    <div className="mt-1 ml-11 text-sm bg-gray-50/50 px-3 py-1 rounded text-gray-700">
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {newTestOptions[opt]}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="mb-6">
@@ -829,6 +945,26 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
 
             {testData && (
               <div className="mt-4 border-t pt-4">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Matnli test (LaTeX)</label>
+                  <textarea
+                    value={editTestText}
+                    onChange={(e) => setEditTestText(e.target.value)}
+                    placeholder="Matnli testni kiriting..."
+                    className="w-full border-2 border-gray-200 rounded-xl p-3 h-32 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none resize-y"
+                  />
+                  {editTestText && (
+                    <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200 prose prose-sm max-w-none">
+                      <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Oldindan ko'rish:</p>
+                      <div className="text-gray-800">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {editTestText}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="mb-4 relative group">
                   {editTestImage ? (
                     <img src={URL.createObjectURL(editTestImage)} alt="Test" className="w-full rounded-lg border border-gray-200" />
@@ -866,7 +1002,32 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
 
                 <p className="text-sm text-gray-500 mb-1">Yaratilgan sana: {new Date(testData.created_at).toLocaleString()}</p>
                 <p className="font-medium mb-4">To'g'ri javob: <span className="text-indigo-600">{testData.correct_answer}</span></p>
-                
+
+                <div className="mb-6 space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">Variantlarni tahrirlash (LaTeX)</label>
+                  {(['A', 'B', 'C', 'D'] as const).map(opt => (
+                    <div key={opt}>
+                      <div className="flex bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                        <span className="bg-gray-100 px-4 py-2 font-bold text-gray-600 border-r border-gray-200 flex items-center justify-center">{opt}</span>
+                        <input 
+                          type="text" 
+                          value={editTestOptions[opt]}
+                          onChange={(e) => setEditTestOptions({...editTestOptions, [opt]: e.target.value})}
+                          placeholder={`${opt} varianti matnini kiriting...`}
+                          className="flex-1 bg-transparent px-3 py-2 outline-none focus:bg-white"
+                        />
+                      </div>
+                      {editTestOptions[opt] && (
+                        <div className="mt-1 ml-11 text-sm bg-gray-50/50 px-3 py-1 rounded text-gray-700">
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                            {editTestOptions[opt]}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
                 <p className="text-sm text-gray-600 mb-2">Javobni tahrirlash:</p>
                 <div className="grid grid-cols-4 gap-2 mb-6">
                   {['A', 'B', 'C', 'D'].map(ans => (
@@ -883,9 +1044,9 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                 <div className="space-y-3">
                   <button 
                     onClick={updateTestAnswer}
-                    disabled={isUploading || (editTestAnswer === testData.correct_answer && !editTestImage)}
+                    disabled={isUploading || (editTestAnswer === testData.correct_answer && !editTestImage && editTestText === (testData.text_content || '') && editTestOptions.A === (testData.option_a || '') && editTestOptions.B === (testData.option_b || '') && editTestOptions.C === (testData.option_c || '') && editTestOptions.D === (testData.option_d || ''))}
                     className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-white transition-all ${
-                      isUploading || (editTestAnswer === testData.correct_answer && !editTestImage)
+                      isUploading || (editTestAnswer === testData.correct_answer && !editTestImage && editTestText === (testData.text_content || '') && editTestOptions.A === (testData.option_a || '') && editTestOptions.B === (testData.option_b || '') && editTestOptions.C === (testData.option_c || '') && editTestOptions.D === (testData.option_d || ''))
                         ? 'bg-gray-300 cursor-not-allowed' 
                         : 'bg-indigo-600 active:scale-95 shadow-sm hover:bg-indigo-700'
                     }`}

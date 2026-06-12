@@ -350,7 +350,7 @@ apiRouter.get('/tests/random', async (req, res) => {
   tests = tests.sort(() => 0.5 - Math.random()).slice(0, limit);
   
   for (const test of tests) {
-    if (test.file_id.startsWith('/uploads/')) {
+    if (test.file_id && test.file_id.startsWith('/uploads/')) {
       test.image_url = test.file_id;
     } else {
       test.image_url = null;
@@ -395,7 +395,7 @@ apiRouter.get('/admin/tests/:id', async (req, res) => {
   const doc = await dbFirestore.collection('tests').doc(req.params.id).get();
   if (!doc.exists) return res.status(404).json({ error: 'Test not found' });
   const test = { id: doc.id, ...doc.data() } as any;
-  if (test.file_id.startsWith('/uploads/')) {
+  if (test.file_id && test.file_id.startsWith('/uploads/')) {
     test.image_url = test.file_id;
   } else {
     test.image_url = null;
@@ -411,9 +411,15 @@ apiRouter.delete('/admin/tests/:id', async (req, res) => {
 
 apiRouter.put('/admin/tests/:id', upload.single('image'), async (req, res) => {
   if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
-  const { correct_answer } = req.body;
+  const { correct_answer, text_content, option_a, option_b, option_c, option_d } = req.body;
   const file = req.file;
-  const updateData: any = { correct_answer };
+  const updateData: any = {};
+  if (correct_answer) updateData.correct_answer = correct_answer;
+  if (text_content !== undefined) updateData.text_content = text_content;
+  if (option_a !== undefined) updateData.option_a = option_a;
+  if (option_b !== undefined) updateData.option_b = option_b;
+  if (option_c !== undefined) updateData.option_c = option_c;
+  if (option_d !== undefined) updateData.option_d = option_d;
   if (file) {
     updateData.file_id = `/uploads/${file.filename}`;
   }
@@ -472,14 +478,44 @@ apiRouter.get('/admin/stats', async (req, res) => {
 apiRouter.post('/admin/tests', upload.single('image'), async (req, res) => {
   if (!dbFirestore) return res.json({});
   try {
-    const { correct_answer } = req.body;
+    const { correct_answer, text_content, option_a, option_b, option_c, option_d } = req.body;
     const file = req.file;
-    if (!file || !correct_answer) {
-      return res.status(400).json({ error: 'Image and correct_answer are required' });
+    if (!file && !text_content) {
+      return res.status(400).json({ error: 'Image or text_content is required' });
     }
-    const fileUrl = `/uploads/${file.filename}`;
-    const docRef = await dbFirestore.collection('tests').add({ file_id: fileUrl, correct_answer, created_at: Date.now() });
-    res.json({ success: true, id: docRef.id });
+    if (!correct_answer) {
+      return res.status(400).json({ error: 'correct_answer is required' });
+    }
+    const fileUrl = file ? `/uploads/${file.filename}` : null;
+    
+    let newTestId = '';
+    await dbFirestore.runTransaction(async (t) => {
+      const counterRef = dbFirestore!.collection('counters').doc('tests');
+      const doc = await t.get(counterRef);
+      let newId = 1;
+      if (doc.exists) {
+        newId = (doc.data() as any).count + 1;
+        t.update(counterRef, { count: newId });
+      } else {
+        t.set(counterRef, { count: newId });
+      }
+      newTestId = newId.toString();
+    });
+
+    const testDoc = { 
+      file_id: fileUrl, 
+      text_content: text_content || null, 
+      option_a: option_a || null,
+      option_b: option_b || null,
+      option_c: option_c || null,
+      option_d: option_d || null,
+      correct_answer, 
+      created_at: Date.now() 
+    };
+    
+    await dbFirestore.collection('tests').doc(newTestId).set(testDoc);
+    
+    res.json({ success: true, id: newTestId });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }

@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Test } from '../types';
 import { CheckCircle, XCircle, Clock, ArrowRight, Flag } from 'lucide-react';
@@ -248,10 +252,16 @@ export default function TestSession({ userId }: { userId: string }) {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-        {currentTest.image_url ? (
+        {currentTest.text_content ? (
+          <div className="p-6 prose prose-sm sm:prose-base max-w-none text-gray-800">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {currentTest.text_content}
+            </ReactMarkdown>
+          </div>
+        ) : currentTest.image_url ? (
           <img src={currentTest.image_url} alt="Test" className="w-full h-auto" />
         ) : (
-          <div className="h-48 bg-gray-100 flex items-center justify-center text-gray-400">Rasm yuklanmadi</div>
+          <div className="h-48 bg-gray-100 flex items-center justify-center text-gray-400">Rasm yoki matn mavjud emas</div>
         )}
         <div className="p-4 bg-indigo-50 border-t border-indigo-100 text-center">
           <a href="https://t.me/Majburiy_Matematika_BMBA" target="_blank" rel="noopener noreferrer" className="text-indigo-600 text-sm font-bold hover:underline">
@@ -260,8 +270,8 @@ export default function TestSession({ userId }: { userId: string }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        {['A', 'B', 'C', 'D'].map(ans => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        {(['A', 'B', 'C', 'D'] as const).map(ans => {
           let btnClass = "bg-white border-2 border-gray-200 text-gray-700 hover:border-indigo-300";
           
           if (selectedAnswer) {
@@ -284,14 +294,26 @@ export default function TestSession({ userId }: { userId: string }) {
             }
           }
 
+          const optText = currentTest[`option_${ans.toLowerCase()}` as keyof Test];
+
           return (
             <button
               key={ans}
               onClick={() => handleAnswer(ans)}
               disabled={!!selectedAnswer}
-              className={`py-4 rounded-xl text-xl font-bold transition-all ${btnClass}`}
+              className={`p-4 rounded-xl text-left transition-all ${btnClass} flex items-center gap-3 overflow-hidden`}
             >
-              {ans}
+              <div className="font-bold text-xl min-w-[24px] shrink-0 text-center">{ans}</div>
+              {optText ? (
+                <div className="h-full border-l-2 border-current opacity-20 mx-1 shrink-0"></div>
+              ) : null}
+              {optText ? (
+                <div className="prose prose-sm max-w-none text-current prose-p:my-0 prose-p:text-current font-medium">
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {optText as string}
+                  </ReactMarkdown>
+                </div>
+              ) : null}
             </button>
           );
         })}

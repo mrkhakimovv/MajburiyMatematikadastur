@@ -275,7 +275,7 @@ export default function Auth({ onLogin, telegramUser }: AuthProps) {
                         : 'border-red-400 focus:ring-red-500 focus:bg-red-50/20'
                       : 'border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white'
                     } rounded-xl sm:text-sm transition-all disabled:opacity-50 font-medium`}
-                  placeholder="admin"
+                  placeholder="username"
                 />
                 
                 {/* Username Validation Status Icon */}

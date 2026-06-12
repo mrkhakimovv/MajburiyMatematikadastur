@@ -26,11 +26,16 @@ export interface UserWithStats extends User {
 }
 
 export interface Test {
-  id: number;
+  id: string;
   file_id: string;
   correct_answer: string;
   created_at: string;
   image_url: string | null;
+  text_content?: string;
+  option_a?: string;
+  option_b?: string;
+  option_c?: string;
+  option_d?: string;
 }
 
 export interface Channel {
