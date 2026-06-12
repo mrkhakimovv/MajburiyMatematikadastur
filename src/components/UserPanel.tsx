@@ -249,7 +249,7 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </div>
             <div className="text-left flex-1 z-10">
-              <h3 className="font-bold text-gray-900 text-base leading-tight">Matematikadan foydali darslar</h3>
+              <h3 className="font-bold text-gray-900 text-base leading-tight">Matematika | QUVONCHBEK HAKIMOV</h3>
               <p className="text-sm text-indigo-600 font-medium mt-0.5">@hakimov_matematika</p>
             </div>
           </a>
@@ -265,7 +265,7 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </div>
             <div className="text-left flex-1 z-10">
-              <h3 className="font-bold text-gray-900 text-base leading-tight">Majburiy Matematika kanali</h3>
+              <h3 className="font-bold text-gray-900 text-base leading-tight">Matematika | PANJI SOATOV</h3>
               <p className="text-sm text-blue-600 font-medium mt-0.5">@Matematika_PanjiSoatov</p>
             </div>
           </a>
