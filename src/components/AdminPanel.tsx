@@ -4,17 +4,20 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home } from 'lucide-react';
+import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home, Video } from 'lucide-react';
 import { Channel } from '../types';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants'>('main');
+  const [activeTab, setActiveTab] = useState<'main' | 'create' | 'edit' | 'chats' | 'stats' | 'all-tests' | 'create-variant' | 'all-variants' | 'videos'>('main');
   const [testId, setTestId] = useState('');
   const [testData, setTestData] = useState<any>(null);
   const [allTests, setAllTests] = useState<any[]>([]);
   const [allVariants, setAllVariants] = useState<any[]>([]);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [newVideoTitle, setNewVideoTitle] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -206,6 +209,55 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
       }
     } catch (e) {
       console.error('Failed to fetch all variants:', e);
+    }
+  };
+
+  const fetchVideos = async () => {
+    try {
+      const res = await fetch('/api/videos');
+      if (res.ok) {
+        setVideos(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch videos:', e);
+    }
+  };
+
+  const doAddVideo = async () => {
+    if (!newVideoTitle.trim() || !newVideoUrl.trim()) {
+      showAlert("Iltimos, sarlavha va havolani kiriting");
+      return;
+    }
+    try {
+      const res = await fetch('/api/admin/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newVideoTitle, url: newVideoUrl })
+      });
+      if (res.ok) {
+        showAlert("Video muvaffaqiyatli qo'shildi");
+        setNewVideoTitle('');
+        setNewVideoUrl('');
+        fetchVideos();
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch {
+      showAlert("Tarmoq xatoligi");
+    }
+  };
+
+  const doDeleteVideo = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/videos/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showAlert("Video o'chirildi");
+        fetchVideos();
+      } else {
+        showAlert("Xatolik yuz berdi");
+      }
+    } catch {
+      showAlert("Tarmoq xatoligi");
     }
   };
 
@@ -438,6 +490,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
     if (activeTab === 'stats') fetchStats();
     if (activeTab === 'all-tests') fetchAllTests();
     if (activeTab === 'all-variants') fetchAllVariants();
+    if (activeTab === 'videos') fetchVideos();
   }, [activeTab]);
 
   useEffect(() => {
@@ -533,6 +586,11 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
               <button onClick={() => setActiveTab('stats')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
                 <BarChart2 size={20} className="text-purple-600" />
                 <span className="font-medium">Umumiy statistika</span>
+              </button>
+
+              <button onClick={() => setActiveTab('videos')} className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 text-gray-700 p-4 rounded-xl transition-colors text-left border border-gray-200">
+                <Video size={20} className="text-red-500" />
+                <span className="font-medium">Videodarslar boshqaruvi</span>
               </button>
             </div>
           </div>
@@ -1265,6 +1323,77 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {activeTab === 'videos' && (
+        <div className="space-y-4">
+          <button onClick={() => setActiveTab('main')} className="flex items-center gap-2 text-indigo-600 font-medium hover:bg-indigo-50 px-3 py-2 rounded-xl transition-colors mb-2 -ml-2">
+            <ArrowLeft size={20} /> Orqaga
+          </button>
+          
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <h2 className="text-lg font-bold mb-4 text-gray-900">Yangi videodars qo'shish</h2>
+            <div className="space-y-3">
+              <input 
+                type="text" 
+                placeholder="Video sarlavhasi" 
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-500"
+                value={newVideoTitle}
+                onChange={e => setNewVideoTitle(e.target.value)}
+              />
+              <input 
+                type="text" 
+                placeholder="YouTube havolasi (Masalan: https://www.youtube.com/watch?v=...)" 
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-500"
+                value={newVideoUrl}
+                onChange={e => setNewVideoUrl(e.target.value)}
+              />
+              <button 
+                onClick={doAddVideo}
+                className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all"
+              >
+                Qo'shish
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <h2 className="text-lg font-bold mb-4 text-gray-900">Barcha videolar ({videos.length})</h2>
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
+              {videos.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Videolar yo'q</p>
+              ) : (
+                videos.map(video => (
+                  <div key={video.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-start gap-3">
+                    <div className="w-20 h-16 bg-gray-200 rounded-lg shrink-0 overflow-hidden relative group">
+                      {video.videoId && !video.videoId.startsWith('http') ? (
+                        <img src={`https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`} alt="thumbnail" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-indigo-100 text-indigo-500">
+                           <Video size={20} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-sm text-gray-900 line-clamp-2">{video.title}</p>
+                      <p className="text-xs text-gray-500 mt-1 truncate">{new Date(video.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (window.confirm('Rostdan ham bu videoni o\'chirmoqchimisiz?')) {
+                          doDeleteVideo(video.id);
+                        }
+                      }}
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg shrink-0 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

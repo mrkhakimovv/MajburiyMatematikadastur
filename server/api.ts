@@ -648,3 +648,52 @@ apiRouter.get('/variants/:id/tests', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+apiRouter.get('/videos', async (req, res) => {
+  if (!dbFirestore) return res.json([]);
+  try {
+    const snap = await dbFirestore.collection('videos').orderBy('created_at', 'desc').get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+apiRouter.post('/admin/videos', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  try {
+    const { title, url } = req.body;
+    if (!title || !url) {
+      return res.status(400).json({ error: 'Title and URL are required' });
+    }
+    
+    // Extract video ID from youtube url if possible
+    let videoId = '';
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.hostname.includes('youtube.com')) {
+        videoId = parsedUrl.searchParams.get('v') || '';
+      } else if (parsedUrl.hostname.includes('youtu.be')) {
+        videoId = parsedUrl.pathname.slice(1);
+      }
+    } catch(e) {}
+
+    const videoData = {
+      title,
+      url,
+      videoId: videoId || url, // Store raw url if not youtube
+      created_at: Date.now()
+    };
+    
+    const docRef = await dbFirestore.collection('videos').add(videoData);
+    res.json({ success: true, id: docRef.id });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+apiRouter.delete('/admin/videos/:id', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  await dbFirestore.collection('videos').doc(req.params.id).delete();
+  res.json({ success: true });
+});

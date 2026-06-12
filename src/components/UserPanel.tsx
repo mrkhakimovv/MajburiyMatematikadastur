@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlayCircle, Target, MessageCircle, User as UserIcon, Trophy, Search, LogOut, MessageSquare } from 'lucide-react';
+import { PlayCircle, Target, MessageCircle, User as UserIcon, Trophy, Search, LogOut, MessageSquare, Video } from 'lucide-react';
 
 export default function UserPanel({ userId, onLogout, isAdmin = false }: { userId: string, onLogout?: () => void, isAdmin?: boolean }) {
   const navigate = useNavigate();
@@ -221,6 +221,19 @@ export default function UserPanel({ userId, onLogout, isAdmin = false }: { userI
           <div className="text-left flex-1">
             <h3 className="font-bold text-gray-900 text-lg">Adminga murojaat</h3>
             <p className="text-sm text-gray-500">Muammo yoki takliflar uchun</p>
+          </div>
+        </button>
+
+        <button 
+          onClick={() => navigate('/videos')}
+          className="w-full flex items-center p-4 bg-white rounded-xl shadow-sm border border-gray-100 active:scale-95 transition-transform"
+        >
+          <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mr-4">
+            <Video size={24} />
+          </div>
+          <div className="text-left flex-1">
+            <h3 className="font-bold text-gray-900 text-lg">Videodarslar</h3>
+            <p className="text-sm text-gray-500">Mavzulashtirilgan video darsliklar</p>
           </div>
         </button>
 
