@@ -307,10 +307,21 @@ apiRouter.get('/messages/:telegram_id', async (req, res) => {
 
 apiRouter.post('/messages/:telegram_id', async (req, res) => {
   if (!dbFirestore) return res.json({ success: true });
-  const { content } = req.body;
+  const { content, reply_to } = req.body;
   await dbFirestore.collection('messages').add({
-    sender_id: req.params.telegram_id, receiver_id: ADMIN_ID, content, created_at: Date.now(), is_read: false
+    sender_id: req.params.telegram_id, receiver_id: ADMIN_ID, content, reply_to: reply_to || null, created_at: Date.now(), is_read: false
   });
+  res.json({ success: true });
+});
+
+apiRouter.post('/messages/:telegram_id/read', async (req, res) => {
+  if (!dbFirestore) return res.status(500).json({ error: 'DB not connected' });
+  const snap = await dbFirestore.collection('messages').where('sender_id', '==', ADMIN_ID).where('receiver_id', '==', req.params.telegram_id).where('is_read', '==', false).get();
+  const batch = dbFirestore.batch();
+  snap.docs.forEach(doc => {
+    batch.update(doc.ref, { is_read: true });
+  });
+  await batch.commit();
   res.json({ success: true });
 });
 
@@ -343,9 +354,9 @@ apiRouter.get('/admin/chats', async (req, res) => {
 
 apiRouter.post('/admin/chats/:telegram_id', async (req, res) => {
   if (!dbFirestore) return res.json({ success: true });
-  const { content } = req.body;
+  const { content, reply_to } = req.body;
   await dbFirestore.collection('messages').add({
-    sender_id: ADMIN_ID, receiver_id: req.params.telegram_id, content, created_at: Date.now(), is_read: false
+    sender_id: ADMIN_ID, receiver_id: req.params.telegram_id, content, reply_to: reply_to || null, created_at: Date.now(), is_read: false
   });
   res.json({ success: true });
 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageSquare, Send, User as UserIcon, Smile } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, User as UserIcon, Smile, Check, CheckCheck, Reply, X } from 'lucide-react';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 export default function Chats({ userId }: { userId: string }) {
@@ -8,6 +8,7 @@ export default function Chats({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [replyTo, setReplyTo] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
@@ -15,7 +16,13 @@ export default function Chats({ userId }: { userId: string }) {
     try {
       const res = await fetch(`/api/messages/${userId}`);
       if (res.ok) {
-        setMessages(await res.json());
+        const data = await res.json();
+        setMessages(data);
+        
+        // Mark as read
+        if (data.some((m: any) => m.sender_id !== userId && !m.is_read)) {
+          await fetch(`/api/messages/${userId}/read`, { method: 'POST' });
+        }
       }
     } catch (e) {
       console.error('Failed to fetch messages:', e);
@@ -50,12 +57,13 @@ export default function Chats({ userId }: { userId: string }) {
       const res = await fetch(`/api/messages/${userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newMessage })
+        body: JSON.stringify({ content: newMessage, reply_to: replyTo?.id })
       });
       
       if (res.ok) {
         setNewMessage('');
         setShowEmojiPicker(false);
+        setReplyTo(null);
         fetchMessages();
       }
     } catch (e) {
@@ -112,13 +120,39 @@ export default function Chats({ userId }: { userId: string }) {
           ) : (
             messages.map(msg => {
               const isMe = msg.sender_id === userId;
+              const repliedMsg = msg.reply_to ? messages.find(m => m.id === msg.reply_to) : null;
               return (
-                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-2 ${isMe ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
-                    <p className="text-sm">{msg.content}</p>
-                    <p className={`text-[10px] mt-1 text-right ${isMe ? 'text-indigo-200' : 'text-gray-400'}`}>
-                      {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </p>
+                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative mb-2`}>
+                  {!isMe && (
+                    <button 
+                      onClick={() => setReplyTo(msg)}
+                      className="absolute -right-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-indigo-600 bg-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-gray-100 hidden sm:block"
+                    >
+                      <Reply size={14} />
+                    </button>
+                  )}
+                  {isMe && (
+                    <button 
+                      onClick={() => setReplyTo(msg)}
+                      className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-indigo-600 bg-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-gray-100 hidden sm:block"
+                    >
+                      <Reply size={14} />
+                    </button>
+                  )}
+                  <div 
+                    className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-2 relative cursor-pointer sm:cursor-default flex flex-col ${isMe ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}
+                    onDoubleClick={() => setReplyTo(msg)}
+                  >
+                    {repliedMsg && (
+                      <div className={`mb-1.5 px-2 py-1.5 text-xs rounded border-l-2 ${isMe ? 'bg-indigo-700/50 border-indigo-300 text-indigo-100' : 'bg-gray-200/50 border-indigo-400 text-gray-600'} line-clamp-1`}>
+                        {repliedMsg.content}
+                      </div>
+                    )}
+                    <p className="text-sm break-words">{msg.content}</p>
+                    <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isMe ? 'text-indigo-200' : 'text-gray-400'}`}>
+                      <span>{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      {isMe && (msg.is_read ? <CheckCheck size={14} className={isMe ? "text-indigo-200" : "text-gray-400"} /> : <Check size={14} className={isMe ? "text-indigo-200" : "text-gray-400"} />)}
+                    </div>
                   </div>
                 </div>
               );
@@ -141,29 +175,42 @@ export default function Chats({ userId }: { userId: string }) {
           </div>
         )}
 
-        <div className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-gray-100 bg-gray-50 flex gap-2 items-center relative z-40">
-          <button
-            type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="text-gray-400 hover:text-indigo-600 transition-colors p-2 shrink-0"
-          >
-            <Smile size={24} />
-          </button>
-          <input 
-            type="text" 
-            placeholder="Xabar yozing..." 
-            className="flex-1 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 bg-white"
-            value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          />
-          <button 
-            onClick={sendMessage} 
-            disabled={!newMessage.trim()}
-            className="bg-indigo-600 text-white w-12 h-12 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"
-          >
-            <Send size={20} />
-          </button>
+        <div className="bg-gray-50 z-40 relative border-t border-gray-100">
+          {replyTo && (
+            <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+              <div className="flex-1 flex flex-col border-l-2 border-indigo-500 pl-3">
+                <span className="text-xs font-bold text-indigo-600">{replyTo.sender_id === userId ? 'Siz' : 'Admin'}</span>
+                <span className="text-xs text-gray-600 line-clamp-1">{replyTo.content}</span>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="p-2 text-gray-400 hover:text-gray-700">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          <div className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex gap-2 items-center">
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="text-gray-400 hover:text-indigo-600 transition-colors p-2 shrink-0"
+            >
+              <Smile size={24} />
+            </button>
+            <input 
+              type="text" 
+              placeholder="Xabar yozing (Javob berish uchun xabarga ikki marta bosing)..." 
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 bg-white text-sm"
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendMessage()}
+            />
+            <button 
+              onClick={sendMessage} 
+              disabled={!newMessage.trim()}
+              className="bg-indigo-600 text-white w-12 h-12 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"
+            >
+              <Send size={20} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

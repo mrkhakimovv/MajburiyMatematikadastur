@@ -4,7 +4,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home, Video, Ban, Unlock } from 'lucide-react';
+import { PlusCircle, Edit, Users, BarChart2, Trash2, Download, User as UserIcon, List, ArrowLeft, LogOut, MessageCircle, Smile, Home, Video, Ban, Unlock, Send, Check, CheckCheck, Reply, X } from 'lucide-react';
 import { Channel } from '../types';
 import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
@@ -29,6 +29,7 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [adminReplyTo, setAdminReplyTo] = useState<any>(null);
   const [newMessage, setNewMessage] = useState('');
   const [stats, setStats] = useState<any>(null);
 
@@ -549,12 +550,13 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
       const res = await fetch(`/api/admin/chats/${selectedChat.telegram_id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newMessage })
+        body: JSON.stringify({ content: newMessage, reply_to: adminReplyTo?.id })
       });
       
       if (res.ok) {
         setNewMessage('');
         setShowEmojiPicker(false);
+        setAdminReplyTo(null);
         fetchChatMessages(selectedChat.telegram_id);
         fetchChats();
       }
@@ -1333,14 +1335,40 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                 
                 <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
                   {chatMessages.map(msg => {
-                    const isAdmin = msg.sender_id === '1986422890' || msg.sender_id === process.env.ADMIN_ID; // Simplified check
+                    const isAdmin = msg.sender_id === '1986422890'; // Simplified check
+                    const repliedMsg = msg.reply_to ? chatMessages.find(m => m.id === msg.reply_to) : null;
                     return (
-                      <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-2xl px-4 py-2 ${isAdmin ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
-                          <p className="text-sm">{msg.content}</p>
-                          <p className={`text-[10px] mt-1 text-right ${isAdmin ? 'text-indigo-200' : 'text-gray-400'}`}>
-                            {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                          </p>
+                      <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'} group relative mb-2`}>
+                        {!isAdmin && (
+                          <button 
+                            onClick={() => setAdminReplyTo(msg)}
+                            className="absolute -right-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-indigo-600 bg-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-gray-100 hidden sm:block"
+                          >
+                            <Reply size={14} />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button 
+                            onClick={() => setAdminReplyTo(msg)}
+                            className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-indigo-600 bg-white rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-gray-100 hidden sm:block"
+                          >
+                            <Reply size={14} />
+                          </button>
+                        )}
+                        <div 
+                          className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-4 py-2 flex flex-col relative cursor-pointer sm:cursor-default ${isAdmin ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}
+                          onDoubleClick={() => setAdminReplyTo(msg)}
+                        >
+                          {repliedMsg && (
+                            <div className={`mb-1.5 px-2 py-1.5 text-xs rounded border-l-2 ${isAdmin ? 'bg-indigo-700/50 border-indigo-300 text-indigo-100' : 'bg-gray-200/50 border-indigo-400 text-gray-600'} line-clamp-1`}>
+                              {repliedMsg.content}
+                            </div>
+                          )}
+                          <p className="text-sm break-words">{msg.content}</p>
+                          <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isAdmin ? 'text-indigo-200' : 'text-gray-400'}`}>
+                            <span>{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            {isAdmin && (msg.is_read ? <CheckCheck size={14} className={isAdmin ? "text-indigo-200" : "text-gray-400"} /> : <Check size={14} className={isAdmin ? "text-indigo-200" : "text-gray-400"} />)}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1362,29 +1390,42 @@ export default function AdminPanel({ onLogout }: { onLogout?: () => void }) {
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t border-gray-100 items-center relative z-40">
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="text-gray-400 hover:text-indigo-600 transition-colors p-2 shrink-0"
-                  >
-                    <Smile size={24} />
-                  </button>
-                  <input 
-                    type="text" 
-                    placeholder="Xabar yozing..." 
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2 outline-none focus:border-indigo-500"
-                    value={newMessage}
-                    onChange={e => setNewMessage(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                  />
-                  <button 
-                    onClick={sendMessage} 
-                    disabled={!newMessage.trim()}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-xl disabled:opacity-50 shrink-0"
-                  >
-                    Yuborish
-                  </button>
+                <div className="bg-gray-50 -mx-4 -mb-4 rounded-b-xl border-t border-gray-100 z-40 relative">
+                  {adminReplyTo && (
+                    <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+                      <div className="flex-1 flex flex-col border-l-2 border-indigo-500 pl-3">
+                        <span className="text-xs font-bold text-indigo-600">{adminReplyTo.sender_id === '1986422890' ? 'Siz' : 'Foydalanuvchi'}</span>
+                        <span className="text-xs text-gray-600 line-clamp-1">{adminReplyTo.content}</span>
+                      </div>
+                      <button onClick={() => setAdminReplyTo(null)} className="p-2 text-gray-400 hover:text-gray-700">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex gap-2 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] items-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="text-gray-400 hover:text-indigo-600 transition-colors p-2 shrink-0"
+                    >
+                      <Smile size={24} />
+                    </button>
+                    <input 
+                      type="text" 
+                      placeholder="Xabar yozing (Javob berish uchun xabarga ikki marta bosing)..." 
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2 outline-none focus:border-indigo-500 text-sm bg-white"
+                      value={newMessage}
+                      onChange={e => setNewMessage(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                    />
+                    <button 
+                      onClick={sendMessage} 
+                      disabled={!newMessage.trim()}
+                      className="bg-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-50 shrink-0"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
                 </div>
               </>
             )}
